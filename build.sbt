@@ -6,8 +6,9 @@ lazy val root = (project in file("."))
   .settings(
     name := "KnnHomeAutomations",
     libraryDependencies ++= Seq(
-      "org.pf4j"    % "pf4j"       % "3.12.0",
-      "org.typelevel" %% "cats-effect" % "3.5.4"
+      "org.pf4j" % "pf4j" % "3.12.0",
+      "org.typelevel" %% "cats-effect" % "3.5.4",
+      "net.sigusr" %% "examples" % "1.0.1",
     ),
 
 
@@ -19,14 +20,14 @@ lazy val root = (project in file("."))
 
     // Common merge strategy to avoid META-INF conflicts
     assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", xs @ _*) =>
+      case PathList("META-INF", xs@_*) =>
         xs.map(_.toLowerCase) match {
           case ("manifest.mf" :: Nil) => MergeStrategy.discard
-          case ("index.list"  :: Nil) => MergeStrategy.discard
-          case ("dependencies":: Nil) => MergeStrategy.discard
-          case ("license"     :: Nil) => MergeStrategy.discard
-          case ("notice"      :: Nil) => MergeStrategy.discard
-          case _                      => MergeStrategy.discard
+          case ("index.list" :: Nil) => MergeStrategy.discard
+          case ("dependencies" :: Nil) => MergeStrategy.discard
+          case ("license" :: Nil) => MergeStrategy.discard
+          case ("notice" :: Nil) => MergeStrategy.discard
+          case _ => MergeStrategy.discard
         }
       case _ => MergeStrategy.first
     }
