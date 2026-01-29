@@ -1,5 +1,6 @@
 package io.github.mercurievv.knn.has
 
+import cats.data.Kleisli
 import io.github.mercurievv.knn.has.mqtt.Mqtt
 import cats.effect.{Concurrent, ExitCode, Temporal}
 import cats.implicits.*
@@ -10,6 +11,7 @@ import fs2.concurrent.SignallingRef
 import net.sigusr.mqtt.api.QualityOfService.*
 import net.sigusr.mqtt.api.{Message, QualityOfService, Session}
 import net.sigusr.mqtt.examples.{LocalSubscriber, localSubscriber, logSessionStatus, onSessionError, putStrLn}
+import org.typelevel.log4cats.Logger
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
@@ -17,7 +19,7 @@ import scala.concurrent.duration.FiniteDuration
 object DataProcessingLogic {
   private val stopTopic: String = s"addons/stop"
 
-  def consume[F[_] : Async](settings: Mqtt.MqttSettings, session: Session[F]): F[ExitCode] = {
+  def consume[F[_] : {Async, Logger}](settings: Mqtt.MqttSettings, session: Session[F]): F[ExitCode] = {
     val subscribedTopics: Vector[(String, QualityOfService)] = Vector(
       (stopTopic, ExactlyOnce),
       (settings.topic, AtMostOnce)
@@ -48,7 +50,10 @@ object DataProcessingLogic {
   }.handleErrorWith(_ => ExitCode.Error.pure)
 
   private def processMessages[F[_] : Sync](stopSignal: SignallingRef[F, Boolean]): Message => Stream[F, Unit] = {
-    case Message(DataProcessingLogic.stopTopic, _) => Stream.exec(stopSignal.set(true))
+    case Message(DataProcessingLogic.stopTopic, pl) =>
+      Stream.eval(
+        putStrLn[F](s"Stop signal received: ${new String(pl.toArray, "UTF-8")}")
+      ) *> Stream.exec(stopSignal.set(true))
     case Message(topic, payload) =>
       Stream.eval(
         putStrLn[F](

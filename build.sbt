@@ -8,6 +8,7 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
       "org.pf4j" % "pf4j" % "3.12.0",
       "org.typelevel" %% "cats-effect" % "3.5.4",
+      "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
       "net.sigusr" %% "examples" % "1.0.1",
     ),
 
