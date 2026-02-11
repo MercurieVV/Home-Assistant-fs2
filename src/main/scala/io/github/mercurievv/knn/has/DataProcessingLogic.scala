@@ -17,25 +17,35 @@ object DataProcessingLogic {
   def consume[F[_] : {Async, Logger}](settings: Mqtt.MqttSettings, session: Session[F]): F[ExitCode] = {
     val subscribedTopics: Vector[(String, QualityOfService)] = Vector(
       (stopTopic, ExactlyOnce),
-      (settings.topic, AtMostOnce)
+      (settings.topic, AtMostOnce),
+      ("tets-topic", AtMostOnce)
     )
     val mqttProgram: SignallingRef[F, Boolean] => Stream[F, Unit] =
       stopSignal =>
         Stream.bracket(session.subscribe(subscribedTopics))(_ => session.unsubscribe(subscribedTopics.map(_._1))) >>
           session.messages
-            .evalMap(processMessages(stopSignal))
+            .evalMap(processMessages(stopSignal)(session))
             .interruptWhen(stopSignal)
             .drain
     SignallingRef[F, Boolean](false).flatMap(mqttProgram(_).compile.drain).as(ExitCode.Success)
   }.handleErrorWith(_ => ExitCode.Error.pure)
 
-  private def processMessages[F[_] : {Sync, Logger}](stopSignal: SignallingRef[F, Boolean]): Message => F[Unit] = {
-    case Message(DataProcessingLogic.stopTopic, pl) =>
-      Logger[F].info(s"Stop signal received: ${new String(pl.toArray, "UTF-8")}") *> stopSignal.set(true)
-    case Message(topic, payload) =>
-      Logger[F].info(
-        s"Topic ${scala.Console.CYAN}$topic${scala.Console.RESET}: " +
-          s"${scala.Console.BOLD}${new String(payload.toArray, "UTF-8")}${scala.Console.RESET}"
-      )
-  }
+  private def processMessages[F[_] : {Sync, Logger}](stopSignal: SignallingRef[F, Boolean])(session: Session[F]): Message => F[Unit] =
+    case Message(topic, pl) =>
+      val jsonString = new String(pl.toArray, "UTF-8")
+      topic match
+        case DataProcessingLogic.stopTopic =>
+          Logger[F].info(s"Stop signal received: $jsonString") *> stopSignal.set(true)
+        case "tets-topic" =>
+          Logger[F].info(s"Oho: $jsonString")
+        case "zigbee2mqtt/bridge/devices" =>
+          Logger[F].info(s"Devices: $jsonString")
+        case "zigbee2mqtt/bridge/groups" =>
+          Logger[F].info(s"Groups: $jsonString")
+        case topic =>
+          Logger[F].info(
+            s"Topic ${scala.Console.CYAN}$topic${scala.Console.RESET}: " +
+              s"${scala.Console.BOLD}$jsonString${scala.Console.RESET}"
+          ) >> session.publish("zigbee2mqtt/tets-topic/set", Vector.empty, AtMostOnce)
+
 }
