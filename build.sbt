@@ -5,6 +5,9 @@ ThisBuild / scalaVersion := "3.7.4"
 lazy val root = (project in file("."))
   .settings(
     name := "KnnHomeAutomations",
+    scalacOptions += "-Ykind-projector:underscores",
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
     libraryDependencies ++= Seq(
       "org.pf4j" % "pf4j" % "3.12.0",
       "org.typelevel" %% "cats-effect" % "3.5.4",
