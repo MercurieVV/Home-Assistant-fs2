@@ -2,6 +2,7 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.7.4"
 
+val circeVersion = "0.14.15"
 lazy val root = (project in file("."))
   .settings(
     name := "KnnHomeAutomations",
@@ -14,6 +15,11 @@ lazy val root = (project in file("."))
       "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
       "net.sigusr" %% "examples" % "1.0.1",
     ),
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core",
+      "io.circe" %% "circe-generic",
+      "io.circe" %% "circe-parser"
+    ).map(_ % circeVersion),
 
 
     // Fat JAR name

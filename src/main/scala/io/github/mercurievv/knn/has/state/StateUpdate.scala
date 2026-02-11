@@ -6,17 +6,18 @@ import cats.Monad
 import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.effect.std.MapRef
-import cats.implicits.{catsSyntaxSemigroup, toArrowOps, toComposeOps}
+import cats.implicits.{catsSyntaxOptionId, catsSyntaxSemigroup, toArrowOps, toComposeOps}
 import cats.kernel.Monoid
 
-case class StateUpdate[-->[_, _]: Arrow, EntityId, EntityState, States](
+case class StateUpdate[-->[_, _]: Arrow, Event, EntityId, EntityState, States](
   getStates: Unit --> States,
-  getEventId: EntityState --> EntityId,
+  getEventId: Event --> EntityId,
+  getEventState: Event --> EntityState,
   mergeIntoState: (States, (EntityState, EntityId)) --> Unit):
 
-  val apply: EntityState --> Unit =
+  val apply: Event --> Unit =
     (getStates.const &&& (
-      Arrow[-->].id[EntityState] &&&
+      getEventState &&&
         getEventId
     )) >>> mergeIntoState
 
@@ -24,20 +25,18 @@ object StateUpdate:
 
   def refMapStateUpdate[
     F[_]: Monad,
+    Event,
     EntityId,
     EntityState: Monoid,
-    States <: MapRef[F, EntityId, EntityState],
+    States <: MapRef[F, EntityId, Option[EntityState]],
   ](
     getStates: Kleisli[F, Unit, States],
-    getEventId: Kleisli[F, EntityState, EntityId],
-  ): StateUpdate[Kleisli[F, _, _], EntityId, EntityState, States] =
-    StateUpdate(getStates, getEventId, refMapUpdate)
+    getEventId: Kleisli[F, Event, EntityId],
+    getEntityState: Kleisli[F, Event, EntityState],
+  ): StateUpdate[Kleisli[F, _, _], Event, EntityId, EntityState, States] =
+    StateUpdate(getStates, getEventId, getEntityState, refMapUpdate)
 
-  def refMapUpdate[
-    F[_],
-    EntityId,
-    EntityState: Monoid,
-    States <: MapRef[F, EntityId, EntityState],
-  ]: Kleisli[F, (States, (EntityState, EntityId)), Unit] = Kleisli {
-    case (states, (inputEvent, id)) => states(id).update(_ |+| inputEvent)
+  def refMapUpdate[F[_], EntityId, EntityState: Monoid, States <: MapRef[F, EntityId, Option[EntityState]]]
+    : Kleisli[F, (States, (EntityState, EntityId)), Unit] = Kleisli { case (states, (inputEvent, id)) =>
+    states(id).update(_ |+| inputEvent.some)
   }

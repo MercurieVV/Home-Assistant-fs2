@@ -37,9 +37,7 @@ class HomeAutomationsPlugin extends Plugin {
       .use {
         DataProcessingLogic.consume(_, _)
       }
-      .onError(e =>
-        Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"),
-      )
+      .onError(e => Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"))
       .flatMap(ec => Logger[F].info(s"Plugin program exited: ${ec}"))
   }
 
@@ -50,9 +48,7 @@ class HomeAutomationsPlugin extends Plugin {
     val previous = fiberRef.getAndSet(Some(newFiber))
     previous.foreach { old =>
       (old.cancel *> old.join.void)
-        .handleErrorWith(e =>
-          Logger[IO].error(e)(s"Previous run stop failed: $e"),
-        )
+        .handleErrorWith(e => Logger[IO].error(e)(s"Previous run stop failed: $e"))
         .unsafeRunSync()
     }
   }
@@ -61,9 +57,7 @@ class HomeAutomationsPlugin extends Plugin {
     fiberRef.getAndSet(None) match {
       case Some(fiber) =>
         (fiber.cancel *> fiber.join.void)
-          .handleErrorWith(e =>
-            SelfAwareLogger[IO].error(e)(s"Stop failed: $e"),
-          )
+          .handleErrorWith(e => SelfAwareLogger[IO].error(e)(s"Stop failed: $e"))
           .unsafeRunCancelable()
 
       case None =>

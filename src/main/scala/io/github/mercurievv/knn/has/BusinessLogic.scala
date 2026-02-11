@@ -7,32 +7,18 @@ import cats.effect.kernel.RefSink
 import cats.effect.std.MapRef
 import cats.implicits._
 import cats.kernel.{Monoid, Semigroup}
+import cats.syntax.option._
 
-trait BusinessLogic[T <: BusinessLogic.Dsl](using val dsl: T) {
+case class BusinessLogic[-->[_, _]: ArrowChoice, InputEvent, States, OutputEvent](
+  eventSource: Unit --> InputEvent,
+  updateState: InputEvent --> States,
+  processEvent: (InputEvent, States) --> Option[OutputEvent],
+  sendEvent: OutputEvent --> Unit) {
 
-  import dsl.*
+  def businessLogic: Unit --> Unit = {
+    val processingOutput: Unit --> Option[OutputEvent] =
+      eventSource >>> (Arrow[-->].id &&& updateState) >>> processEvent
 
-  def businessLogic: Unit --> Option[OutputEvent] =
-    eventSource >>> (A.id &&& updateState) >>> processEvent
-}
-
-object BusinessLogic:
-
-  trait Dsl {
-    type InputEvent
-    type States
-    type -->[_, _]
-    type OutputEvent
-
-    val A = ArrowChoice[-->]
-
-    given ArrowChoice[-->] = scala.compiletime.deferred
-
-    def eventSource: Unit --> InputEvent
-
-    //  def getStateFetcher: Unit --> StateFetcher
-    def updateState: InputEvent --> States
-    // def filter: Unit  --> InputEvent
-
-    def processEvent: (InputEvent, States) --> Option[OutputEvent]
+    processingOutput.map(Either.fromOption(_, ())) >>> (Arrow[-->].id ||| sendEvent)
   }
+}

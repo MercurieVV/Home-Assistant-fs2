@@ -26,9 +26,7 @@ object DataProcessingLogic {
     )
     val mqttProgram: SignallingRef[F, Boolean] => Stream[F, Unit] =
       stopSignal =>
-        Stream.bracket(session.subscribe(subscribedTopics))(_ =>
-          session.unsubscribe(subscribedTopics.map(_._1)),
-        ) >>
+        Stream.bracket(session.subscribe(subscribedTopics))(_ => session.unsubscribe(subscribedTopics.map(_._1))) >>
           session.messages
             .evalMap(processMessages(stopSignal)(session))
             .interruptWhen(stopSignal)
@@ -59,9 +57,6 @@ object DataProcessingLogic {
           Logger[F].info(
             s"Topic ${scala.Console.CYAN}$topic${scala.Console.RESET}: " +
               s"${scala.Console.BOLD}$jsonString${scala.Console.RESET}",
-          ) >> session.publish("zigbee2mqtt/tets-topic/set",
-                               Vector.empty,
-                               AtMostOnce,
-          )
+          ) >> session.publish("zigbee2mqtt/tets-topic/set", Vector.empty, AtMostOnce)
 
 }
