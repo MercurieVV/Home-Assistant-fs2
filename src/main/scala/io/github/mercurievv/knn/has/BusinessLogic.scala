@@ -5,18 +5,19 @@ import cats.arrow.{Arrow, ArrowChoice, Category}
 import cats.data.{Kleisli, State}
 import cats.effect.kernel.RefSink
 import cats.effect.std.MapRef
-import cats.implicits.*
+import cats.implicits._
 import cats.kernel.{Monoid, Semigroup}
 
 trait BusinessLogic[T <: BusinessLogic.Dsl](using val dsl: T) {
 
   import dsl.*
 
-  def businessLogic: Unit --> Option[OutputEvent] = eventSource >>> (A.id &&& updateState) >>> processEvent
+  def businessLogic: Unit --> Option[OutputEvent] =
+    eventSource >>> (A.id &&& updateState) >>> processEvent
 }
 
-
 object BusinessLogic:
+
   trait Dsl {
     type InputEvent
     type States
@@ -31,7 +32,7 @@ object BusinessLogic:
 
     //  def getStateFetcher: Unit --> StateFetcher
     def updateState: InputEvent --> States
-    //def filter: Unit  --> InputEvent
+    // def filter: Unit  --> InputEvent
 
     def processEvent: (InputEvent, States) --> Option[OutputEvent]
   }
