@@ -1,7 +1,8 @@
 package io.github.mercurievv.cats
 
+import cats.Applicative
 import cats.arrow.Arrow
-import cats.implicits.toComposeOps
+import cats.implicits.*
 
 package object arrow {
 
