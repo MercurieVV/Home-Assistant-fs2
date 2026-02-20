@@ -26,33 +26,32 @@ object EventProcessing:
     type States
     type OutputEvent
 
-trait BusinessLogic[
+trait EventsStreamProcessing[
   -->[_, _]: Arrow,
   ==>[_, _]: ArrowChoice,
-  BLT <: BusinessLogic.Types,
+  BLT <: EventsStreamProcessing.Types,
   EPT <: EventProcessing.Types] {
-  
+
   val blt: BLT
   import blt.*
-  
+
   val ep: EventProcessing[==>, EPT]
+
   import ep.*
   import ep.given
   import ep.t.*
-  
-  val consume: Consumer --> (Unit ==> InputEvent)
+
+  val consume: Consumer --> InputEvent
   val produce: Producer --> (OutputEvent ==> Unit)
 
-  val run: (Consumer, Producer) --> (Unit ==> Unit) = (consume *** produce) >>>
-    Arrow[-->].lift { case (c, p) =>
-      c >>> ep.run.map(Either.fromOption(_, ()))
-        >>> (Arrow[==>].id ||| p)
+  val run: (Consumer, Producer) --> (InputEvent, InputEvent ==> Unit) = (consume *** produce) >>>
+    Arrow[-->].lift { case (inputEvent, publish) =>
+      val processInputAndPublish = ep.run.map(Either.fromOption(_, ())) >>> (Arrow[==>].id[Unit] ||| publish)
+      (inputEvent, processInputAndPublish)
     }
 }
 
-object BusinessLogic:
-
+object EventsStreamProcessing:
   trait Types:
     type Consumer
     type Producer
-
