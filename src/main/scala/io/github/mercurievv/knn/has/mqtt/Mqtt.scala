@@ -148,8 +148,8 @@ object Mqtt {
 
       validated: Either[Throwable, MqttSettings] =
         for
-          host <- parseHost(hostStr)
-          port <- parsePort(portStr)
+          host  <- parseHost(hostStr)
+          port  <- parsePort(portStr)
           topic <- topic.toRight(
             new IllegalStateException(
               "Missing required MQTT setting 'MQTT_TOPIC'. Provide it via environment variable, JVM property (-DMQTT_TOPIC=...), or .env file.",

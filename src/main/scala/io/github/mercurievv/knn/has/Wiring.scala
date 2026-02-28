@@ -24,43 +24,41 @@ object Wiring {
     encodeMessage: ts.InputEvent => Message,
   )(using MES: Monoid[ts.EventState],
   ): Unit = {
+    type TS = ts.type
     val tw = new TypesWiring[F](ts)
     import tw.*
     val epti = eventProcessingTypes
     val espti = eventStreamProcessingTypes
 
-    type StatesS = MapRef[F, ts.EventId, Option[ts.EventState]]
     type --->[A, B] = Kleisli[F, A, B]
     type S[b] = Stream[F, b]
     type ===>[A, B] = Kleisli[S, A, B]
 
-    type StateUpdateTSI = StateUpdateTS[--->, StatesS]
-    val stateUpdate = Kleisli[Id, ts.type, StateUpdateTSI]((tss: ts.type) =>
-      StateUpdate.refMapStateUpdate[F, tss.InputEvent, tss.EventId, tss.EventState, StatesS](
+    type StateUpdateTSI = StateUpdateTS[--->, ts.States]
+    val stateUpdate = Kleisli[Id, TS, StateUpdateTSI]((ts: TS) =>
+      StateUpdate.refMapStateUpdate[F, ts.InputEvent, ts.EventId, ts.EventState, ts.States](
         getEventId     = Kleisli.fromFunction(_.eventId),
         getEntityState = Kleisli.fromFunction(_.eventState),
       ),
     )
 
-    type EP = EventProcessing[--->](epti)
-    val epk: Kleisli[Id, (StatesS, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
-      new EventProcessing[--->](epti) {
+    type EP = EventProcessing[--->, EPTTS]
+    given Kleisli[Id, (ts.States, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
+      new EventProcessing[--->, EPTTS](epti) {
 
         import epti.*
 
-        private val value: Kleisli[F, InputEvent, (StatesS, InputEvent)] =
-          Kleisli.pure[F, InputEvent, StatesS](mapRef) &&& Arrow[--->].id
+        private val value: Kleisli[F, InputEvent, (ts.States, InputEvent)] =
+          Kleisli.pure[F, InputEvent, ts.States](mapRef) &&& Arrow[--->].id
         override val updateState: InputEvent ---> States = (value >>> stateUpdate.apply).as(mapRef)
         override val makeDecision: (InputEvent, States) ---> Option[OutputEvent] = ???
       }
     }
 
-    type ESP = EventsStreamProcessing[===>, --->, ESPTTS, EP]
-    val processing: Kleisli[Id, EP, ESP] = Kleisli((epp: EP) =>
-      new EventsStreamProcessing[===>, --->, ESPTTS, EP](espti, epp) {
+    type ESP = EventsStreamProcessing[===>, --->, ESPTTS, EPTTS, EP]
+    given Kleisli[Id, EP, ESP] = Kleisli((epp: EP) =>
+      new EventsStreamProcessing[===>, --->, ESPTTS, EPTTS, EP](espti, epp) {
         import espt.*
-
-        summon[ep.t.InputEvent =:= ts.InputEvent]
 
         override val consume: Consumer ===> ep.t.InputEvent = Kleisli((_: Consumer).messages).map(decodeMessage)
         override val produce: Producer ===> (ep.t.OutputEvent ---> Unit) =
@@ -73,6 +71,6 @@ object Wiring {
       },
     )
 
-    processing.run.apply(???) // .evalMap { case (inputEvent, publish) => publish.apply(inputEvent) }
+    // processing.run.apply(???) // .evalMap { case (inputEvent, publish) => publish.apply(inputEvent) }
   }
 }

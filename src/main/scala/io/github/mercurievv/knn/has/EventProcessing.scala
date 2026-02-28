@@ -9,7 +9,7 @@ import cats.implicits.*
 import cats.kernel.{Monoid, Semigroup}
 import cats.syntax.option.*
 
-trait EventProcessing[-->[_, _]: Arrow](tracked val t: EventProcessing.Types) {
+trait EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](val t: T) {
   import t.*
 
   val updateState: InputEvent --> States
@@ -29,7 +29,8 @@ trait EventsStreamProcessing[
   ==>[_, _]: Arrow,
   -->[_, _]: ArrowChoice,
   T <: EventsStreamProcessing.Types,
-  EP <: EventProcessing[-->],
+  TT <: EventProcessing.Types,
+  EP <: EventProcessing[-->, TT],
 ](
   val espt: T,
   val ep: EP) {

@@ -14,14 +14,16 @@ import io.github.mercurievv.knn.has.{EventProcessing, TypeSystem}
 import language.experimental.pureFunctions
 
 class TypesWiring[F[_]](tracked val ts: TypeSystem):
+  type TS = ts.type
+
   class EPT[TS <: TypeSystem](val typeSystem: TS) extends EventProcessing.Types {
     type InputEvent = typeSystem.InputEvent
     type States = typeSystem.States
     type OutputEvent = typeSystem.OutputEvent
   }
-  type EPTTS = EPT[ts.type]
-  val eventProcessingTypes: EPTTS = new EPT[ts.type ](ts)
-  
+  type EPTTS = EPT[TS]
+  val eventProcessingTypes: EPTTS = new EPT[TS](ts)
+
   class ESPT extends EventsStreamProcessing.Types {
     override type Consumer = Session[F]
     override type Producer = Session[F]
