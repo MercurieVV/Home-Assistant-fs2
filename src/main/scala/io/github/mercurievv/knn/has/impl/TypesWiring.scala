@@ -1,20 +1,20 @@
 package io.github.mercurievv.knn.has.impl
 
-import cats.{Applicative, CommutativeMonad, Id}
+import io.github.mercurievv.knn.has.EventsStreamProcessing
+import io.github.mercurievv.knn.has.state.StateUpdate
+import io.github.mercurievv.knn.has.{EventProcessing, TypeSystem}
+
 import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.effect.std.MapRef
 import cats.implicits.{toArrowOps, toComposeOps}
-import io.github.mercurievv.knn.has.EventsStreamProcessing
+import cats.{Applicative, CommutativeMonad, Id}
+
 import net.sigusr.mqtt.api.Session
-//import io.github.mercurievv.knn.has.Wiring.F
-import io.github.mercurievv.knn.has.state.StateUpdate
-import io.github.mercurievv.knn.has.{EventProcessing, TypeSystem}
 
 import language.experimental.pureFunctions
 
-class TypesWiring[F[_]](tracked val ts: TypeSystem):
-  type TS = ts.type
+class TypesWiring[F[_], TS <: TypeSystem](val ts: TS):
 
   class EPT[TS <: TypeSystem](val typeSystem: TS) extends EventProcessing.Types {
     type InputEvent = typeSystem.InputEvent
