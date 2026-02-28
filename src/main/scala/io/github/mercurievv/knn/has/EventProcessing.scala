@@ -9,8 +9,7 @@ import cats.implicits.*
 import cats.kernel.{Monoid, Semigroup}
 import cats.syntax.option.*
 
-trait EventProcessing[-->[_, _]: Arrow, EPT <: EventProcessing.Types] {
-  val t: EPT
+trait EventProcessing[-->[_, _]: Arrow](tracked val t: EventProcessing.Types) {
   import t.*
 
   val updateState: InputEvent --> States
@@ -27,31 +26,32 @@ object EventProcessing:
     type OutputEvent
 
 trait EventsStreamProcessing[
-  -->[_, _]: Arrow,
-  ==>[_, _]: ArrowChoice,
-  BLT <: EventsStreamProcessing.Types,
-  EPT <: EventProcessing.Types] {
+  ==>[_, _]: Arrow,
+  -->[_, _]: ArrowChoice,
+  T <: EventsStreamProcessing.Types,
+  EP <: EventProcessing[-->],
+](
+  val espt: T,
+  val ep: EP) {
 
-  val blt: BLT
-  import blt.*
-
-  val ep: EventProcessing[==>, EPT]
+  import espt.*
 
   import ep.*
   import ep.given
   import ep.t.*
 
-  val consume: Consumer --> InputEvent
-  val produce: Producer --> (OutputEvent ==> Unit)
+  val consume: Consumer ==> InputEvent
+  val produce: Producer ==> (OutputEvent --> Unit)
 
-  val run: (Consumer, Producer) --> (InputEvent, InputEvent ==> Unit) = (consume *** produce) >>>
-    Arrow[-->].lift { case (inputEvent, publish) =>
-      val processInputAndPublish = ep.run.map(Either.fromOption(_, ())) >>> (Arrow[==>].id[Unit] ||| publish)
+  val run: (Consumer, Producer) ==> (InputEvent, InputEvent --> Unit) = (consume *** produce) >>>
+    Arrow[==>].lift { case (inputEvent, publish) =>
+      val processInputAndPublish = ep.run.map(Either.fromOption(_, ())) >>> (Arrow[-->].id[Unit] ||| publish)
       (inputEvent, processInputAndPublish)
     }
 }
 
 object EventsStreamProcessing:
+
   trait Types:
     type Consumer
     type Producer

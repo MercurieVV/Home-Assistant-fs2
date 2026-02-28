@@ -2,13 +2,13 @@ package io.github.mercurievv.knn.has
 
 import cats.effect.ExitCode
 import cats.effect.kernel.{Async, Sync}
-import cats.implicits._
+import cats.implicits.*
 
-import fs2._
+import fs2.*
 import fs2.concurrent.SignallingRef
 
 import _root_.io.github.mercurievv.knn.has.mqtt.Mqtt
-import net.sigusr.mqtt.api.QualityOfService._
+import net.sigusr.mqtt.api.QualityOfService.*
 import net.sigusr.mqtt.api.{Message, QualityOfService, Session}
 import org.typelevel.log4cats.Logger
 

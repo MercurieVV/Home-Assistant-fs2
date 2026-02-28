@@ -7,6 +7,7 @@ trait TypeSystem {
   type EventState
   type InputEvent = (EventId, EventState)
   type OutputEvent = (EventId, EventState)
+  type States
 
   extension (e: InputEvent) {
     def eventId: EventId

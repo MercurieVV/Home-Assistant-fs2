@@ -5,12 +5,12 @@ import io.github.mercurievv.knn.has.mqtt.Mqtt
 
 import java.util.concurrent.atomic.AtomicReference
 
-import cats.effect.implicits._
+import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, Dispatcher}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{ExitCode, FiberIO, IO}
-import cats.implicits._
+import cats.implicits.*
 
 import com.comcast.ip4s.{Host, Port}
 import net.sigusr.mqtt.api.{Session, SessionConfig, TransportConfig}

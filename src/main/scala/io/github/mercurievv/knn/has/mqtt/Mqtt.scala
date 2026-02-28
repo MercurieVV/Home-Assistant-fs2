@@ -4,17 +4,17 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.kernel.Async
 import cats.effect.std.Console
 import cats.effect.{Resource, Temporal}
-import cats.syntax.all._
+import cats.syntax.all.*
 
 import fs2.Stream
 
 import com.comcast.ip4s.{Host, Port}
-import net.sigusr.mqtt.api.QualityOfService._
+import net.sigusr.mqtt.api.QualityOfService.*
 import net.sigusr.mqtt.api.RetryConfig.Custom
 import net.sigusr.mqtt.api.{Session, SessionConfig, TransportConfig}
 import net.sigusr.mqtt.examples.localSubscriber
@@ -38,13 +38,11 @@ object Mqtt {
 
   private def stripQuotes(value: String): String =
     val v = value.trim
-    if (
-      v.length >= 2 &&
+    if v.length >= 2 &&
       ((v.startsWith("\"")
         && v.endsWith("\""))
         || (v.startsWith("'") && v.endsWith("'")))
-    )
-      v.substring(1, v.length - 1)
+    then v.substring(1, v.length - 1)
     else v
 
   /** Minimal .env parser.
@@ -60,11 +58,11 @@ object Mqtt {
       .filter(line => line.nonEmpty && !line.startsWith("#"))
       .flatMap { line =>
         val idx = line.indexOf('=')
-        if (idx <= 0) None
+        if idx <= 0 then None
         else
           val key = line.substring(0, idx).trim
           val raw = line.substring(idx + 1).trim
-          if (key.isEmpty) None
+          if key.isEmpty then None
           else Some(key -> stripQuotes(raw))
       }
       .toMap
@@ -73,7 +71,7 @@ object Mqtt {
     println(s"Loading .env file from: $path")
     Async[F].blocking {
       println("blocked for file read")
-      if (Files.exists(path) && Files.isRegularFile(path))
+      if Files.exists(path) && Files.isRegularFile(path) then
         println(s".env file found at: $path")
         val content = Files.readString(path, StandardCharsets.UTF_8)
         println(s".env file content:\n$content")

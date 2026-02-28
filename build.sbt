@@ -1,12 +1,12 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.7.4"
+ThisBuild / scalaVersion := "3.8.1"
 
 val circeVersion = "0.14.15"
 lazy val root = (project in file("."))
   .settings(
     name := "KnnHomeAutomations",
-    scalacOptions += "-Ykind-projector:underscores",
+    scalacOptions ++= Seq("-Ykind-projector:underscores", "-rewrite", "-source 3.0-migration", "-source:future", "-language:experimental.modularity"),
     semanticdbEnabled := true,
     semanticdbVersion := scalafixSemanticdb.revision,
     libraryDependencies ++= Seq(
