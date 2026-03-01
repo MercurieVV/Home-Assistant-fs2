@@ -44,7 +44,9 @@ trait EventsStreamProcessing[
   val consume: Consumer ==> InputEvent
   val produce: Producer ==> (OutputEvent --> Unit)
 
-  val run: (Consumer, Producer) ==> (InputEvent, InputEvent --> Unit) = (consume *** produce) >>>
+  type EventProcessor = (InputEvent, InputEvent --> Unit)
+
+  val run: (Consumer, Producer) ==> EventProcessor = (consume *** produce) >>>
     Arrow[==>].lift { case (inputEvent, publish) =>
       val processInputAndPublish = ep.run.map(Either.fromOption(_, ())) >>> (Arrow[-->].id[Unit] ||| publish)
       (inputEvent, processInputAndPublish)
