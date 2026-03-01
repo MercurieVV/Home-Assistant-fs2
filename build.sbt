@@ -20,6 +20,11 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser"
     ).map(_ % circeVersion),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "discipline-munit" % "2.0.0"  % Test,
+      "org.typelevel" %% "cats-laws"        % "2.12.0" % Test,
+      "io.circe"      %% "circe-testing"    % circeVersion % Test,
+    ),
 
 
     // Fat JAR name

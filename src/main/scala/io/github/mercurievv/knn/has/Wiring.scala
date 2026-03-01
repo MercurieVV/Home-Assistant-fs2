@@ -2,16 +2,13 @@ package io.github.mercurievv.knn.has
 
 import io.github.mercurievv.knn.has.impl.TypesWiring
 import io.github.mercurievv.knn.has.state.StateUpdate
-
 import cats.arrow.{Arrow, FunctionK}
 import cats.data.Kleisli
 import cats.effect.std.MapRef
 import cats.implicits.*
 import cats.kernel.Monoid
-import cats.{Applicative, CommutativeMonad, Id, ~>}
-
+import cats.{Id, Monad, ~>}
 import fs2.*
-
 import net.sigusr.mqtt.api.{Message, Session}
 
 import language.experimental.pureFunctions
@@ -22,11 +19,12 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = MapRef[F, EventId, Option[EventState]]
   }
 
-  def wire[F[_]: {CommutativeMonad, Applicative}](
+  def wire[F[_]: {Monad}](
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
     encodeMessage: ts.InputEvent => Message,
+    decisionMaking: Kleisli[F, (ts.InputEvent, ts.States), Option[ts.OutputEvent]],
   )(using MES: Monoid[ts.EventState],
   ): Kleisli[
     Stream[F, _],
@@ -60,7 +58,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
         private val value: Kleisli[F, InputEvent, (ts.States, InputEvent)] =
           Kleisli.pure[F, InputEvent, ts.States](mapRef) &&& Arrow[-->].id
         override val updateState: InputEvent --> States = (value >>> stateUpdate.apply).as(mapRef)
-        override val makeDecision: (InputEvent, States) --> Option[OutputEvent] = ???
+        override val makeDecision: (InputEvent, States) --> Option[OutputEvent] = decisionMaking
       }
     }
 
