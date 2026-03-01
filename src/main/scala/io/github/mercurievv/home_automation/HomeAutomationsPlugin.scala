@@ -7,14 +7,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
-import cats.effect.std.{Console, Dispatcher}
+import cats.effect.std.Console
 import cats.effect.unsafe.IORuntime
-import cats.effect.{ExitCode, FiberIO, IO}
+import cats.effect.{FiberIO, IO}
 import cats.implicits.*
 
-import com.comcast.ip4s.{Host, Port}
-import net.sigusr.mqtt.api.{Session, SessionConfig, TransportConfig}
-import net.sigusr.mqtt.examples.localSubscriber
 import org.pf4j.Plugin
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, SelfAwareLogger}

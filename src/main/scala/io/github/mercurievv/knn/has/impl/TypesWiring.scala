@@ -4,12 +4,6 @@ import io.github.mercurievv.knn.has.EventsStreamProcessing
 import io.github.mercurievv.knn.has.state.StateUpdate
 import io.github.mercurievv.knn.has.{EventProcessing, TypeSystem}
 
-import cats.arrow.Arrow
-import cats.data.Kleisli
-import cats.effect.std.MapRef
-import cats.implicits.{toArrowOps, toComposeOps}
-import cats.{Applicative, CommutativeMonad, Id}
-
 import net.sigusr.mqtt.api.Session
 
 import language.experimental.pureFunctions

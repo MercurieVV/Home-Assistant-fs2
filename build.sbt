@@ -6,7 +6,7 @@ val circeVersion = "0.14.15"
 lazy val root = (project in file("."))
   .settings(
     name := "KnnHomeAutomations",
-    scalacOptions ++= Seq("-Ykind-projector:underscores", "-rewrite", "-source 3.0-migration", "-source:future", "-language:experimental.modularity"),
+    scalacOptions ++= Seq("-Ykind-projector:underscores", "-rewrite", "-source 3.0-migration", "-source:future", "-language:experimental.modularity", "-Wunused:imports"),
     semanticdbEnabled := true,
     semanticdbVersion := scalafixSemanticdb.revision,
     libraryDependencies ++= Seq(

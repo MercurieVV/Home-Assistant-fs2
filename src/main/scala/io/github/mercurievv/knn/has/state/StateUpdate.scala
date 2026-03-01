@@ -1,7 +1,5 @@
 package io.github.mercurievv.knn.has.state
 
-import io.github.mercurievv.cats.arrow.*
-
 import cats.Monad
 import cats.arrow.Arrow
 import cats.data.Kleisli

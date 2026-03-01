@@ -1,7 +1,6 @@
 package io.github.mercurievv.knn.has
 
 import io.github.mercurievv.knn.has.impl.TypesWiring
-import io.github.mercurievv.knn.has.mqtt.Mqtt.MqttSettings
 import io.github.mercurievv.knn.has.state.StateUpdate
 
 import cats.arrow.{Arrow, FunctionK}
@@ -9,7 +8,7 @@ import cats.data.Kleisli
 import cats.effect.std.MapRef
 import cats.implicits.*
 import cats.kernel.Monoid
-import cats.{Applicative, CommutativeMonad, Id, Monad, ~>}
+import cats.{Applicative, CommutativeMonad, Id, ~>}
 
 import fs2.*
 

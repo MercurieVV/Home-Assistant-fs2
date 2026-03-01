@@ -4,20 +4,15 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
-import scala.jdk.CollectionConverters.*
 
+import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.effect.std.Console
-import cats.effect.{Resource, Temporal}
 import cats.syntax.all.*
 
-import fs2.Stream
-
 import com.comcast.ip4s.{Host, Port}
-import net.sigusr.mqtt.api.QualityOfService.*
 import net.sigusr.mqtt.api.RetryConfig.Custom
 import net.sigusr.mqtt.api.{Session, SessionConfig, TransportConfig}
-import net.sigusr.mqtt.examples.localSubscriber
 import retry.RetryPolicies
 
 object Mqtt {

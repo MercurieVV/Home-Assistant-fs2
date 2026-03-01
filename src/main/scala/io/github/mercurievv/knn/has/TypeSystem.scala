@@ -1,7 +1,5 @@
 package io.github.mercurievv.knn.has
 
-import io.circe.Json
-
 trait TypeSystem {
   type EventId
   type EventState

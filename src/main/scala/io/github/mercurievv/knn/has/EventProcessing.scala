@@ -1,13 +1,7 @@
 package io.github.mercurievv.knn.has
 
-import cats.Monad
-import cats.arrow.{Arrow, ArrowChoice, Category}
-import cats.data.{Kleisli, State}
-import cats.effect.kernel.RefSink
-import cats.effect.std.MapRef
+import cats.arrow.{Arrow, ArrowChoice}
 import cats.implicits.*
-import cats.kernel.{Monoid, Semigroup}
-import cats.syntax.option.*
 
 trait EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](val t: T) {
   import t.*
@@ -37,8 +31,6 @@ trait EventsStreamProcessing[
 
   import espt.*
 
-  import ep.*
-  import ep.given
   import ep.t.*
 
   val consume: Consumer ==> InputEvent
