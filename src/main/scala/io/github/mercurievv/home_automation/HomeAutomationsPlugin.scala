@@ -1,8 +1,10 @@
 package io.github.mercurievv.home_automation
 
 import cats.Applicative
+import cats.data.Kleisli
 import io.github.mercurievv.knn.has.Wiring
 import io.github.mercurievv.knn.has.mqtt.Mqtt
+import io.github.mercurievv.knn.has.mqtt.MessageCoders.*
 
 import java.util.concurrent.atomic.AtomicReference
 import cats.effect.implicits.*
@@ -27,17 +29,15 @@ class HomeAutomationsPlugin extends Plugin {
     new AtomicReference[Option[FiberIO[Unit]]](None)
 
   def programmF[F[_]: {SelfAwareLogger, Async, Console, Applicative}]: F[Unit] = {
+    val ts = new TypeSystemImpl[F]
     val pluginResources: Resource[F, (Mqtt.MqttSettings, Session[F])] = Mqtt
       .loadSettings[F]
       .toResource
       .mproduct(Mqtt.create[F])
 
-    pluginResources
-      .use { case (settings, session) =>
-          val ts = new TypeSystemImpl[F]
-          val refMap : MapRef[F, ts.EventId, Option[ts.EventState]] = ???
-          Wiring.wire[F].apply(ts)(???, ???, ???).apply(((ts, refMap), session)).compile.drain
-          //DataProcessingLogic.consume(_, _)
+    (pluginResources, MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().toResource).tupled
+      .use { case ((settings, session), mapRef) =>
+          Wiring.wire[F].apply(ts)(decodeMessage, encodeMessage, Kleisli.pure(None)).apply(((ts, mapRef), session)).compile.drain
       }
       .onError(e => Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"))
       .flatMap(ec => Logger[F].info(s"Plugin program exited: ${ec}"))

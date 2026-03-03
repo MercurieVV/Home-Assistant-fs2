@@ -12,15 +12,3 @@ trait TypeSystem {
     def eventState: EventState
   }
 }
-
-object TypeSystem:
-
-  val Impl = new TypeSystem {
-
-    override type EventId = this.type
-    override type EventState = this.type
-    extension (e: (this.type, this.type)) {
-      override def eventId: this.type = ???
-      override def eventState: this.type = ???
-    }
-  }
