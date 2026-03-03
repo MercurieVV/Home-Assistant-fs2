@@ -3,11 +3,11 @@ package io.github.mercurievv.knn.has
 import cats.arrow.{Arrow, ArrowChoice}
 import cats.implicits.*
 
-trait EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](val t: T) {
+case class EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](
+  t: T,
+  updateState: t.InputEvent --> t.States,
+  makeDecision: (t.InputEvent, t.States) --> Option[t.OutputEvent]) {
   import t.*
-
-  val updateState: InputEvent --> States
-  val makeDecision: (InputEvent, States) --> Option[OutputEvent]
 
   val run: InputEvent --> Option[OutputEvent] = (Arrow[-->].id &&& updateState) >>> makeDecision
 }

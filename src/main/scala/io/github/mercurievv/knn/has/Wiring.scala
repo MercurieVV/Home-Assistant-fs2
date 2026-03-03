@@ -55,15 +55,13 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
     type EP = EventProcessing[-->, EPTTS]
     given Kleisli[Id, (ts.States, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
-      new EventProcessing[-->, EPTTS](epti) {
-
-        import epti.*
-
-        private val value: Kleisli[F, InputEvent, (ts.States, InputEvent)] =
-          Kleisli.pure[F, InputEvent, ts.States](mapRef) &&& Arrow[-->].id
-        override val updateState: InputEvent --> States = (value >>> stateUpdate.apply).as(mapRef)
-        override val makeDecision: (InputEvent, States) --> Option[OutputEvent] = decisionMaking
-      }
+      import epti.*
+      val value: InputEvent --> (ts.States, InputEvent) = Kleisli.pure(mapRef) &&& Arrow[-->].id
+      new EventProcessing[-->, EPTTS](
+        t            = epti,
+        updateState  = (value >>> stateUpdate.apply).as(mapRef),
+        makeDecision = decisionMaking,
+      )
     }
 
     type ESP = EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP]

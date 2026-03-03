@@ -42,11 +42,15 @@ class HomeAutomationsPlugin extends Plugin {
       .use { case ((settings, session), mapRef) =>
         Wiring
           .wire[F]
-          .apply(ts)(decodeMessage, encodeMessage, Kleisli.pure(None))
-          .apply(((ts, mapRef), session))
-          .handleErrorWith(e =>
-            fs2.Stream.exec(Logger[F].error(e)(s"Stream element failed: ${e.getMessage}"))
+          .apply(ts)(
+            decodeMessage,
+            encodeMessage,
+            Kleisli { case (event, _) =>
+              Logger[F].info(s"Received: ${event._1} -> ${io.circe.Json.fromJsonObject(event._2).noSpaces}").as(None)
+            },
           )
+          .apply(((ts, mapRef), session))
+          .handleErrorWith(e => fs2.Stream.exec(Logger[F].error(e)(s"Stream element failed: ${e.getMessage}")))
           .repeat
           .compile
           .drain
