@@ -12,11 +12,14 @@ import JsonInstances.given
 class JsonInstancesLawsTest extends DisciplineSuite:
 
   given Arbitrary[JsonObject] = Arbitrary(
-    arbitraryJson.arbitrary.map(_.asObject.getOrElse(JsonObject.empty))
+    arbitraryJson.arbitrary.map(_.asObject.getOrElse(JsonObject.empty)),
   )
 
-  given Eq[JsonObject] = Eq.instance((a, b) =>
-    Json.fromJsonObject(a) == Json.fromJsonObject(b)
+  given Eq[JsonObject] = Eq.instance(
+    (
+      a,
+      b,
+    ) => Json.fromJsonObject(a) == Json.fromJsonObject(b),
   )
 
   checkAll("Semigroup[Json]", SemigroupTests[Json].semigroup)

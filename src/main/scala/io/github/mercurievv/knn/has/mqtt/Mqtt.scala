@@ -5,10 +5,11 @@ import java.nio.file.{Files, Path, Paths}
 
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
 
+import cats.syntax.all.*
+
 import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.effect.std.Console
-import cats.syntax.all.*
 
 import com.comcast.ip4s.{Host, Port}
 import net.sigusr.mqtt.api.RetryConfig.Custom

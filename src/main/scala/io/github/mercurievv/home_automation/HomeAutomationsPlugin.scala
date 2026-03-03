@@ -1,20 +1,23 @@
 package io.github.mercurievv.home_automation
 
-import cats.Applicative
-import cats.data.Kleisli
+import io.github.mercurievv.home_automation.instances.JsonInstances.given
 import io.github.mercurievv.knn.has.Wiring
-import io.github.mercurievv.knn.has.mqtt.Mqtt
+import io.github.mercurievv.knn.has.impl.TypeSystemImpl
 import io.github.mercurievv.knn.has.mqtt.MessageCoders.*
+import io.github.mercurievv.knn.has.mqtt.Mqtt
 
 import java.util.concurrent.atomic.AtomicReference
+
+import cats.Applicative
+import cats.data.Kleisli
+import cats.implicits.*
+
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
-import cats.implicits.*
-import io.github.mercurievv.home_automation.instances.JsonInstances.given
-import io.github.mercurievv.knn.has.impl.TypeSystemImpl
+
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -37,10 +40,18 @@ class HomeAutomationsPlugin extends Plugin {
 
     (pluginResources, MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().toResource).tupled
       .use { case ((settings, session), mapRef) =>
-          Wiring.wire[F].apply(ts)(decodeMessage, encodeMessage, Kleisli.pure(None)).apply(((ts, mapRef), session)).compile.drain
+        Wiring
+          .wire[F]
+          .apply(ts)(decodeMessage, encodeMessage, Kleisli.pure(None))
+          .apply(((ts, mapRef), session))
+          .handleErrorWith(e =>
+            fs2.Stream.exec(Logger[F].error(e)(s"Stream element failed: ${e.getMessage}"))
+          )
+          .repeat
+          .compile
+          .drain
       }
-      .onError(e => Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"))
-      .flatMap(ec => Logger[F].info(s"Plugin program exited: ${ec}"))
+      .handleErrorWith(e => Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"))
   }
 
   override def start(): Unit = {

@@ -3,9 +3,10 @@ package io.github.mercurievv.knn.has.state
 import cats.Monad
 import cats.arrow.Arrow
 import cats.data.Kleisli
-import cats.effect.std.MapRef
 import cats.implicits.{catsSyntaxOptionId, catsSyntaxSemigroup, toArrowOps, toComposeOps, toStrongOps}
 import cats.kernel.Monoid
+
+import cats.effect.std.MapRef
 
 case class StateUpdate[-->[_, _]: Arrow, Event, EntityId, EntityState, States](
   getEventId: Event --> EntityId,

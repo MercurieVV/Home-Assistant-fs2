@@ -1,8 +1,9 @@
 package io.github.mercurievv.knn.has
 
+import cats.implicits.*
+
 import cats.effect.ExitCode
 import cats.effect.kernel.{Async, Sync}
-import cats.implicits.*
 
 import fs2.*
 import fs2.concurrent.SignallingRef
