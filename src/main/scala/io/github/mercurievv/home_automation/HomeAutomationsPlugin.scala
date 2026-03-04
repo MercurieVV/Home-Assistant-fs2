@@ -8,6 +8,7 @@ import io.github.mercurievv.knn.has.mqtt.Mqtt
 
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
 
 import cats.Applicative
@@ -32,10 +33,10 @@ import org.typelevel.log4cats.{Logger, SelfAwareLogger}
 class HomeAutomationsPlugin extends Plugin {
   given SelfAwareLogger[IO] = Slf4jLogger.getLogger[IO]
 
-  private type PluginState = (runtime: IORuntime, fiber: FiberIO[Unit])
+  private var runtime: IORuntime = uninitialized
 
-  private val stateRef: AtomicReference[Option[PluginState]] =
-    new AtomicReference(None)
+  private val fiberRef: AtomicReference[Option[FiberIO[Unit]]] =
+    new AtomicReference[Option[FiberIO[Unit]]](None)
 
   def programmF[F[_]: {SelfAwareLogger, Async, Console, Applicative}]: F[Unit] = {
     val ts = new TypeSystemImpl[F]
@@ -60,15 +61,14 @@ class HomeAutomationsPlugin extends Plugin {
                   decodeMessage,
                   encodeMessage,
                   Kleisli { case (event, _) =>
-                    println(s"Received event: ${event._1} with state: ${event._2}")
                     Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
                   },
                 )
                 .apply(((ts, mapRef), session))
                 .drain
             }
-          // Mqtt.logAllTopics(session) mergeHaltBoth mainStream
           mainStream
+//          Mqtt.logAllTopics(session) mergeHaltBoth mainStream
         }
         .attempts(retryPolicy)
         .evalMap {
@@ -81,29 +81,29 @@ class HomeAutomationsPlugin extends Plugin {
   }
 
   override def start(): Unit = {
-    val rt = IORuntime.builder().build()
-    given IORuntime = rt
+    runtime = IORuntime.builder().build()
+    given IORuntime = runtime
 
-    val fiber = programmF[IO].start.unsafeRunSync()
+    val newFiber = programmF[IO].start.unsafeRunSync()
 
-    val previous = stateRef.getAndSet(Some((runtime = rt, fiber = fiber)))
-    previous.foreach { s =>
-      given IORuntime = s.runtime
-      (s.fiber.cancel *> s.fiber.join.void)
+    // If start() is called again, stop the previous fiber to avoid leaks
+    val previous = fiberRef.getAndSet(Some(newFiber))
+    previous.foreach { old =>
+      (old.cancel *> old.join.void)
         .handleErrorWith(e => Logger[IO].error(e)(s"Previous run stop failed: $e"))
         .unsafeRunSync()
-      s.runtime.shutdown()
     }
   }
 
   override def stop(): Unit =
-    stateRef.getAndSet(None) match {
-      case Some(s) =>
-        given IORuntime = s.runtime
-        (s.fiber.cancel *> s.fiber.join.void)
+    fiberRef.getAndSet(None) match {
+      case Some(fiber) =>
+        given IORuntime = runtime
+        (fiber.cancel *> fiber.join.void)
           .handleErrorWith(e => SelfAwareLogger[IO].error(e)(s"Stop failed: $e"))
           .unsafeRunSync()
-        s.runtime.shutdown()
+        runtime.shutdown()
+        runtime = null
         println("App stopped")
 
       case None =>
