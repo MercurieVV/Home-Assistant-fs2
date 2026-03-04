@@ -5,6 +5,7 @@ import io.github.mercurievv.knn.has.Wiring
 import io.github.mercurievv.knn.has.impl.TypeSystemImpl
 import io.github.mercurievv.knn.has.mqtt.MessageCoders.*
 import io.github.mercurievv.knn.has.mqtt.Mqtt
+import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -53,21 +54,19 @@ class HomeAutomationsPlugin extends Plugin {
         .resource(pluginResources)
         // .evalTap { case (settings, _) => Logger[F].info(s"Started app. MQTT topic: ${settings.topic}") }
         .flatMap { case (settings, session) =>
-          val mainStream =
-            Mqtt.subscribedMessages(session, settings.topic).flatMap { _ =>
-              Wiring
-                .wire[F]
-                .apply(ts)(
-                  decodeMessage,
-                  encodeMessage,
-                  Kleisli { case (event, _) =>
-                    Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
-                  },
-                )
-                .apply(((ts, mapRef), session))
-                .drain
-            }
-          mainStream
+          Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
+            Wiring
+              .wire[F]
+              .apply(ts)(
+                decodeMessage,
+                encodeMessage,
+                Kleisli { case (event, _) =>
+                  Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
+                },
+              )
+              .apply(((ts, mapRef), session))
+              .evalMap { case (inputEvent, process) => process.run(inputEvent) }
+              .drain
 //          Mqtt.logAllTopics(session) mergeHaltBoth mainStream
         }
         .attempts(retryPolicy)
