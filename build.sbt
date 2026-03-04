@@ -13,6 +13,7 @@ lazy val root = (project in file("."))
       "org.pf4j" % "pf4j" % "3.12.0",
       "org.typelevel" %% "cats-effect" % "3.5.4",
       "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
+      "org.slf4j" % "slf4j-simple" % "2.0.17",
       "net.sigusr" %% "examples" % "1.0.1",
     ),
     libraryDependencies ++= Seq(
@@ -42,6 +43,7 @@ lazy val root = (project in file("."))
           case ("dependencies" :: Nil) => MergeStrategy.discard
           case ("license" :: Nil) => MergeStrategy.discard
           case ("notice" :: Nil) => MergeStrategy.discard
+          case ("services" :: _) => MergeStrategy.concat
           case _ => MergeStrategy.discard
         }
       case _ => MergeStrategy.first

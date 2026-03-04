@@ -8,6 +8,8 @@ import io.github.mercurievv.knn.has.mqtt.Mqtt
 
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.concurrent.duration.*
+
 import cats.Applicative
 import cats.data.Kleisli
 import cats.implicits.*
@@ -17,6 +19,10 @@ import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
+
+import io.circe.*
+
+import fs2.*
 
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
@@ -38,31 +44,43 @@ class HomeAutomationsPlugin extends Plugin {
       .toResource
       .mproduct(Mqtt.create[F])
 
-    (pluginResources, MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().toResource).tupled
-      .use { case ((settings, session), mapRef) =>
-        Wiring
-          .wire[F]
-          .apply(ts)(
-            decodeMessage,
-            encodeMessage,
-            Kleisli { case (event, _) =>
-              Logger[F].info(s"Received: ${event._1} -> ${io.circe.Json.fromJsonObject(event._2).noSpaces}").as(None)
-            },
-          )
-          .apply(((ts, mapRef), session))
-          .handleErrorWith(e => fs2.Stream.exec(Logger[F].error(e)(s"Stream element failed: ${e.getMessage}")))
-          .repeat
-          .compile
-          .drain
-      }
-      .handleErrorWith(e => Logger[F].error(e)(s"Plugin program failed: ${e.getMessage}"))
+    val retryPolicy: Stream[F, FiniteDuration] =
+      Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
+
+    MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().flatMap { mapRef =>
+      Stream
+        .resource(pluginResources)
+        .flatMap { case (_, session) =>
+          Wiring
+            .wire[F]
+            .apply(ts)(
+              decodeMessage,
+              encodeMessage,
+              Kleisli { case (event, _) =>
+                Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
+              },
+            )
+            .apply(((ts, mapRef), session))
+            .drain
+        }
+        .attempts(retryPolicy)
+        .evalMap {
+          case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
+          case Right(_) => Applicative[F].unit
+        }
+        .compile
+        .drain
+    }
   }
 
   override def start(): Unit = {
+    println("a")
     val newFiber = programmF[IO].start.unsafeRunSync()
+    println("b")
 
     // If start() is called again, stop the previous fiber to avoid leaks
     val previous = fiberRef.getAndSet(Some(newFiber))
+    println("c")
     previous.foreach { old =>
       (old.cancel *> old.join.void)
         .handleErrorWith(e => Logger[IO].error(e)(s"Previous run stop failed: $e"))

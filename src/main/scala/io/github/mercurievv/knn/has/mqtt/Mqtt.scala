@@ -126,7 +126,7 @@ object Mqtt {
     * .env file)
     */
   def loadSettings[F[_]: Async]: F[MqttSettings] =
-    val dotEnvPathStr = "/data/plugins/ha-java.env".some
+    val dotEnvPathStr = "./ha-java.env".some
     // fixme    val dotEnvPathStr = sys.env.get("DOTENV_PATH").orElse(sys.props.get("DOTENV_PATH")).map(_.trim).filter(_.nonEmpty)
     val dotEnvPath =
       dotEnvPathStr.map(Paths.get(_)).getOrElse(Paths.get(".env"))

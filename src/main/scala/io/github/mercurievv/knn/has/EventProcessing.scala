@@ -9,7 +9,7 @@ case class EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](
   makeDecision: (t.InputEvent, t.States) --> Option[t.OutputEvent]) {
   import t.*
 
-  val run: InputEvent --> Option[OutputEvent] = (Arrow[-->].id &&& updateState) >>> makeDecision
+  lazy val run: InputEvent --> Option[OutputEvent] = (Arrow[-->].id &&& updateState) >>> makeDecision
 }
 
 object EventProcessing:
@@ -38,7 +38,7 @@ trait EventsStreamProcessing[
 
   type EventProcessor = (InputEvent, InputEvent --> Unit)
 
-  val run: (Consumer, Producer) ==> EventProcessor = (consume *** produce) >>>
+  lazy val run: (Consumer, Producer) ==> EventProcessor = (consume *** produce) >>>
     Arrow[==>].lift { case (inputEvent, publish) =>
       val processInputAndPublish = ep.run.map(Either.fromOption(_, ())) >>> (Arrow[-->].id[Unit] ||| publish)
       (inputEvent, processInputAndPublish)
