@@ -1,5 +1,7 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
+lazy val deploy = taskKey[Unit]("Deploy fat jar to Home Assistant addon")
+
 ThisBuild / scalaVersion := "3.8.1"
 
 val circeVersion = "0.14.15"
@@ -27,6 +29,20 @@ lazy val root = (project in file("."))
       "io.circe"      %% "circe-testing"    % circeVersion % Test,
     ),
 
+
+    // Deploy to Home Assistant addon
+    deploy := {
+      import scala.sys.process._
+      val jar = assembly.value
+      val baseUrl = "http://192.168.0.247:8666/plugins"
+      val deleteCode = Seq("curl", "-f", "-X", "DELETE", s"$baseUrl/knns-home-automations:1.0.0"
+      ).!(ProcessLogger(println, System.err.println))
+      println(s"Deleted exit code: $deleteCode")
+      val exitCode = Seq(
+        "curl", "-f", "-F", s"file=@${jar.getAbsolutePath}", baseUrl
+      ).!(ProcessLogger(println, System.err.println))
+      if (exitCode != 0) sys.error(s"Deploy failed with exit code $exitCode")
+    },
 
     // Fat JAR name
     assembly / assemblyJarName := s"${name.value}-${version.value}.jar",
