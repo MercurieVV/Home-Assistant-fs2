@@ -15,7 +15,7 @@ lazy val root = (project in file("."))
       "org.pf4j" % "pf4j" % "3.12.0",
       "org.typelevel" %% "cats-effect" % "3.6.3",
       "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
-      "org.slf4j" % "slf4j-simple" % "2.0.17",
+      "ch.qos.logback" % "logback-classic" % "1.5.18",
       "net.sigusr" %% "examples" % "1.0.1",
     ),
     libraryDependencies ++= Seq(
