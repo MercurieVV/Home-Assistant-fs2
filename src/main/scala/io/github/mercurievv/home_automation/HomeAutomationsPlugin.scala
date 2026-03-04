@@ -5,7 +5,6 @@ import io.github.mercurievv.knn.has.Wiring
 import io.github.mercurievv.knn.has.impl.TypeSystemImpl
 import io.github.mercurievv.knn.has.mqtt.MessageCoders.*
 import io.github.mercurievv.knn.has.mqtt.Mqtt
-import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -26,6 +25,7 @@ import io.circe.*
 
 import fs2.*
 
+import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
 import org.typelevel.log4cats.slf4j.Slf4jLogger

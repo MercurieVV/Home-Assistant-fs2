@@ -12,7 +12,7 @@ lazy val root = (project in file("."))
     semanticdbEnabled := true,
     semanticdbVersion := scalafixSemanticdb.revision,
     libraryDependencies ++= Seq(
-      "org.pf4j" % "pf4j" % "3.12.0",
+      "org.pf4j" % "pf4j" % "3.12.0" % Provided,
       "org.typelevel" %% "cats-effect" % "3.6.3",
       "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
       "ch.qos.logback" % "logback-classic" % "1.5.18",
