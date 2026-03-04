@@ -69,10 +69,18 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       new EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP](espti, epp) {
         import espt.*
 
-        override val consume: Consumer ==> ep.t.InputEvent = Kleisli((_: Consumer).messages).map(decodeMessage)
+        override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) =>
+          println("c " + c)
+          c.messages,
+        ).map(m =>
+          print(" m ")
+          decodeMessage(m),
+        )
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
+            // println("producer " + producer)
             Kleisli((oe: ts.OutputEvent) =>
+              println("oe " + oe)
               val msg = encodeMessage(oe)
               producer.publish(msg.topic, msg.payload),
             ).pure,

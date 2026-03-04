@@ -32,10 +32,10 @@ import org.typelevel.log4cats.{Logger, SelfAwareLogger}
 class HomeAutomationsPlugin extends Plugin {
   given SelfAwareLogger[IO] = Slf4jLogger.getLogger[IO]
 
-  given IORuntime = IORuntime.global
+  private type PluginState = (runtime: IORuntime, fiber: FiberIO[Unit])
 
-  private val fiberRef: AtomicReference[Option[FiberIO[Unit]]] =
-    new AtomicReference[Option[FiberIO[Unit]]](None)
+  private val stateRef: AtomicReference[Option[PluginState]] =
+    new AtomicReference(None)
 
   def programmF[F[_]: {SelfAwareLogger, Async, Console, Applicative}]: F[Unit] = {
     val ts = new TypeSystemImpl[F]
@@ -47,21 +47,28 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().flatMap { mapRef =>
+    Logger[F].info("Starting app") <* MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().flatMap { mapRef =>
       Stream
         .resource(pluginResources)
-        .flatMap { case (_, session) =>
-          Wiring
-            .wire[F]
-            .apply(ts)(
-              decodeMessage,
-              encodeMessage,
-              Kleisli { case (event, _) =>
-                Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
-              },
-            )
-            .apply(((ts, mapRef), session))
-            .drain
+        // .evalTap { case (settings, _) => Logger[F].info(s"Started app. MQTT topic: ${settings.topic}") }
+        .flatMap { case (settings, session) =>
+          val mainStream =
+            Mqtt.subscribedMessages(session, settings.topic).flatMap { _ =>
+              Wiring
+                .wire[F]
+                .apply(ts)(
+                  decodeMessage,
+                  encodeMessage,
+                  Kleisli { case (event, _) =>
+                    println(s"Received event: ${event._1} with state: ${event._2}")
+                    Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
+                  },
+                )
+                .apply(((ts, mapRef), session))
+                .drain
+            }
+          // Mqtt.logAllTopics(session) mergeHaltBoth mainStream
+          mainStream
         }
         .attempts(retryPolicy)
         .evalMap {
@@ -74,26 +81,30 @@ class HomeAutomationsPlugin extends Plugin {
   }
 
   override def start(): Unit = {
-    println("a")
-    val newFiber = programmF[IO].start.unsafeRunSync()
-    println("b")
+    val rt = IORuntime.builder().build()
+    given IORuntime = rt
 
-    // If start() is called again, stop the previous fiber to avoid leaks
-    val previous = fiberRef.getAndSet(Some(newFiber))
-    println("c")
-    previous.foreach { old =>
-      (old.cancel *> old.join.void)
+    val fiber = programmF[IO].start.unsafeRunSync()
+
+    val previous = stateRef.getAndSet(Some((runtime = rt, fiber = fiber)))
+    previous.foreach { s =>
+      given IORuntime = s.runtime
+      (s.fiber.cancel *> s.fiber.join.void)
         .handleErrorWith(e => Logger[IO].error(e)(s"Previous run stop failed: $e"))
         .unsafeRunSync()
+      s.runtime.shutdown()
     }
   }
 
   override def stop(): Unit =
-    fiberRef.getAndSet(None) match {
-      case Some(fiber) =>
-        (fiber.cancel *> fiber.join.void)
+    stateRef.getAndSet(None) match {
+      case Some(s) =>
+        given IORuntime = s.runtime
+        (s.fiber.cancel *> s.fiber.join.void)
           .handleErrorWith(e => SelfAwareLogger[IO].error(e)(s"Stop failed: $e"))
-          .unsafeRunCancelable()
+          .unsafeRunSync()
+        s.runtime.shutdown()
+        println("App stopped")
 
       case None =>
         System.err.println("WARN: stop called but plugin not running")
