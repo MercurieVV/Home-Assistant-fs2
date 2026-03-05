@@ -1,6 +1,6 @@
-package io.github.mercurievv.knn.has.impl
+package io.github.mercurievv.home_automation.impl
 
-import io.github.mercurievv.knn.has.Wiring.TypeSystemWithStates
+import io.github.mercurievv.home_automation.Wiring.TypeSystemWithStates
 
 import io.circe.JsonObject
 

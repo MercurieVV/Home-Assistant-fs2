@@ -1,12 +1,11 @@
-package io.github.mercurievv.knn.has.impl
+package io.github.mercurievv.home_automation.impl
 
-import io.github.mercurievv.knn.has.EventsStreamProcessing
-import io.github.mercurievv.knn.has.state.StateUpdate
-import io.github.mercurievv.knn.has.{EventProcessing, TypeSystem}
+import io.github.mercurievv.home_automation.state.StateUpdate
+import io.github.mercurievv.home_automation.{EventProcessing, EventsStreamProcessing, TypeSystem}
+
+import scala.language.experimental.pureFunctions
 
 import net.sigusr.mqtt.api.Session
-
-import language.experimental.pureFunctions
 
 class TypesWiring[F[_], TS <: TypeSystem](val ts: TS):
 

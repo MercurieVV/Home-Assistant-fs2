@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has
+package io.github.mercurievv.home_automation
 
 trait TypeSystem {
   type EventId

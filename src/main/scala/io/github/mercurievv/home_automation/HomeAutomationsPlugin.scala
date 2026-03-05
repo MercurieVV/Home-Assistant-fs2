@@ -1,10 +1,10 @@
 package io.github.mercurievv.home_automation
 
+import io.github.mercurievv.home_automation.Wiring
+import io.github.mercurievv.home_automation.impl.TypeSystemImpl
 import io.github.mercurievv.home_automation.instances.JsonInstances.given
-import io.github.mercurievv.knn.has.Wiring
-import io.github.mercurievv.knn.has.impl.TypeSystemImpl
-import io.github.mercurievv.knn.has.mqtt.MessageCoders.*
-import io.github.mercurievv.knn.has.mqtt.Mqtt
+import io.github.mercurievv.home_automation.mqtt.MessageCoders.*
+import io.github.mercurievv.home_automation.mqtt.Mqtt
 
 import java.util.concurrent.atomic.AtomicReference
 

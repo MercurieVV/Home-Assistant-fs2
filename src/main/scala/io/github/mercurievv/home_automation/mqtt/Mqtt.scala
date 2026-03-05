@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has.mqtt
+package io.github.mercurievv.home_automation.mqtt
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}

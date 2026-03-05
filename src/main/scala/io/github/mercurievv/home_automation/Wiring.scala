@@ -1,7 +1,9 @@
-package io.github.mercurievv.knn.has
+package io.github.mercurievv.home_automation
 
-import io.github.mercurievv.knn.has.impl.TypesWiring
-import io.github.mercurievv.knn.has.state.StateUpdate
+import io.github.mercurievv.home_automation.impl.TypesWiring
+import io.github.mercurievv.home_automation.state.StateUpdate
+
+import scala.language.experimental.pureFunctions
 
 import cats.arrow.{Arrow, FunctionK}
 import cats.data.Kleisli
@@ -15,8 +17,6 @@ import fs2.*
 
 import net.sigusr.mqtt.api.{Message, Session}
 import org.typelevel.log4cats.Logger
-
-import language.experimental.pureFunctions
 
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 

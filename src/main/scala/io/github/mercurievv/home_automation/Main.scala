@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has
+package io.github.mercurievv.home_automation
 
 import io.github.mercurievv.home_automation.HomeAutomationsPlugin
 

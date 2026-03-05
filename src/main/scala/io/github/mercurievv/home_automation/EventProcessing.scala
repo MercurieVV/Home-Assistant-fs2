@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has
+package io.github.mercurievv.home_automation
 
 import cats.arrow.{Arrow, ArrowChoice}
 import cats.implicits.*
@@ -29,9 +29,8 @@ trait EventsStreamProcessing[
   val espt: T,
   val ep: EP) {
 
-  import espt.*
-
   import ep.t.*
+  import espt.*
 
   val consume: Consumer ==> InputEvent
   val produce: Producer ==> (OutputEvent --> Unit)

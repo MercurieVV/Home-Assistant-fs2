@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has.mqtt
+package io.github.mercurievv.home_automation.mqtt
 
 import io.circe.JsonObject
 

@@ -1,4 +1,4 @@
-package io.github.mercurievv.knn.has.state
+package io.github.mercurievv.home_automation.state
 
 import cats.Monad
 import cats.arrow.Arrow

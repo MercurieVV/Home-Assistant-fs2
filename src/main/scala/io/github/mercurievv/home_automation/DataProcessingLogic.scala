@@ -1,4 +1,6 @@
-package io.github.mercurievv.knn.has
+package io.github.mercurievv.home_automation
+
+import io.github.mercurievv.home_automation.mqtt.Mqtt
 
 import cats.implicits.*
 
@@ -8,7 +10,6 @@ import cats.effect.kernel.{Async, Sync}
 import fs2.*
 import fs2.concurrent.SignallingRef
 
-import _root_.io.github.mercurievv.knn.has.mqtt.Mqtt
 import net.sigusr.mqtt.api.QualityOfService.*
 import net.sigusr.mqtt.api.{Message, QualityOfService, Session}
 import org.typelevel.log4cats.Logger
