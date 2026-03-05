@@ -49,15 +49,15 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type StateUpdateTSI = StateUpdateTS[-->, ts.States]
     given Kleisli[Id, TS, StateUpdateTSI] = Kleisli[Id, TS, StateUpdateTSI]((ts: TS) =>
       StateUpdate.refMapStateUpdate[F, ts.InputEvent, ts.EventId, ts.EventState, ts.States](
-        getEventId     = Kleisli.fromFunction(_.eventId),
-        getEntityState = Kleisli.fromFunction(_.eventState),
+        getEventId     = Arrow[-->].lift(_.eventId),
+        getEntityState = Arrow[-->].lift(_.eventState),
       ),
     )
 
     type EP = EventProcessing[-->, EPTTS]
     given Kleisli[Id, (ts.States, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
       import epti.*
-      val value: InputEvent --> (ts.States, InputEvent) = Kleisli.pure(mapRef) &&& Arrow[-->].id
+      val value: InputEvent --> (ts.States, InputEvent) = Arrow[-->].lift(_ => mapRef) &&& Arrow[-->].id
       new EventProcessing[-->, EPTTS](
         t            = epti,
         updateState  = (value >>> stateUpdate.apply).as(mapRef),

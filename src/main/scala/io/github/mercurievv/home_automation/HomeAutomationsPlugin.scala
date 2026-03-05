@@ -49,10 +49,9 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    Logger[F].info("Starting app") <* MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]().flatMap { mapRef =>
+    MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream
         .resource(pluginResources)
-        // .evalTap { case (settings, _) => Logger[F].info(s"Started app. MQTT topic: ${settings.topic}") }
         .flatMap { case (settings, session) =>
           Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
             Wiring
@@ -67,7 +66,6 @@ class HomeAutomationsPlugin extends Plugin {
               .apply(((ts, mapRef), session))
               .evalMap { case (inputEvent, process) => process.run(inputEvent) }
               .drain
-//          Mqtt.logAllTopics(session) mergeHaltBoth mainStream
         }
         .attempts(retryPolicy)
         .evalMap {
