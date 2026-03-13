@@ -5,26 +5,22 @@ import io.github.mercurievv.home_automation.impl.TypeSystemImpl
 import io.github.mercurievv.home_automation.instances.JsonInstances.given
 import io.github.mercurievv.home_automation.mqtt.MessageCoders.*
 import io.github.mercurievv.home_automation.mqtt.Mqtt
+import io.github.mercurievv.home_automation.rules.Light
+import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
 
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
-
 import cats.Applicative
 import cats.data.Kleisli
 import cats.implicits.*
-
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
-
 import io.circe.*
-
 import fs2.*
-
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
@@ -49,19 +45,25 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
+    val lights = new Light[F]()
+
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream
         .resource(pluginResources)
         .flatMap { case (settings, session) =>
+
           Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
             Wiring
               .wire[F]
               .apply(ts)(
                 decodeMessage,
                 encodeMessage,
-                Kleisli { case (event, _) =>
-                  Logger[F].info(s"Received: ${event._1} -> ${Json.fromJsonObject(event._2).noSpaces}").as(None)
-                },
+                lights.lightSwitch.lmap[(ts.InputEvent, ts.States)](t =>
+                  (
+                    t._1,
+                    Kleisli((k: EntityId) => t._2(k).get.map(_.getOrElse(JsonObject.empty))),
+                  ),
+                ),
               )
               .apply(((ts, mapRef), session))
               .evalMap { case (inputEvent, process) => process.run(inputEvent) }

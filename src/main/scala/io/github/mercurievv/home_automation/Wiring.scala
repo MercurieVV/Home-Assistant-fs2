@@ -28,7 +28,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
-    encodeMessage: ts.InputEvent => Message,
+    encodeMessage: ts.OutputEvent => Message,
     decisionMaking: Kleisli[F, (ts.InputEvent, ts.States), Option[ts.OutputEvent]],
   )(using MES: Monoid[ts.EventState],
   ): Kleisli[
@@ -49,8 +49,8 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type StateUpdateTSI = StateUpdateTS[-->, ts.States]
     given Kleisli[Id, TS, StateUpdateTSI] = Kleisli[Id, TS, StateUpdateTSI]((ts: TS) =>
       StateUpdate.refMapStateUpdate[F, ts.InputEvent, ts.EventId, ts.EventState, ts.States](
-        getEventId     = Arrow[-->].lift(_.eventId),
-        getEntityState = Arrow[-->].lift(_.eventState),
+        getEventId     = Arrow[-->].lift(_.eventId.value),
+        getEntityState = Arrow[-->].lift(_.eventState.value),
       ),
     )
 
