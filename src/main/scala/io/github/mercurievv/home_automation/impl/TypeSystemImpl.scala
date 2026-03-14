@@ -1,10 +1,12 @@
 package io.github.mercurievv.home_automation.impl
 
-import cats.Functor
 import io.github.mercurievv.home_automation.Wiring.TypeSystemWithStates
-import io.circe.JsonObject
-import cats.implicits.toFunctorOps
 import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
+
+import cats.Functor
+import cats.implicits.toFunctorOps
+
+import io.circe.JsonObject
 
 class TypeSystemImpl[F[_]] extends TypeSystemWithStates[F] {
 

@@ -1,24 +1,30 @@
 package io.github.mercurievv.home_automation.rules
 
-import cats.Applicative
 import io.github.mercurievv.minuscles.opaques.Opaque
+
+import cats.Applicative
+
 import monocle.{Iso, Prism}
 
 object EventTypes {
   opaque type In[a] = a
+
   object In:
     def apply[A](a: A): In[A] = a
-    def unapply[A](a: In[A]): A  = a
+    def unapply[A](a: In[A]): A = a
     extension [A](o: In[A]) def value: A = o
+
     given Applicative[In] = new Applicative[In]:
       override def pure[A](x: A): In[A] = x
       override def ap[A, B](ff: In[A => B])(fa: In[A]): In[B] = ff(fa)
 
   opaque type Out[a] = a
+
   object Out:
     def apply[A](a: A): Out[A] = a
     def unapply[A](a: Out[A]): A = a
     extension [A](o: Out[A]) def value: A = o
+
     given Applicative[Out] = new Applicative[Out]:
       override def pure[A](x: A): Out[A] = x
       override def ap[A, B](ff: Out[A => B])(fa: Out[A]): Out[B] = ff(fa)

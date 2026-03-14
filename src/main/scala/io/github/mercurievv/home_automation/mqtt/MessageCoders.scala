@@ -1,7 +1,9 @@
 package io.github.mercurievv.home_automation.mqtt
 
-import io.circe.JsonObject
 import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out}
+
+import io.circe.JsonObject
+
 import net.sigusr.mqtt.api.Message
 
 object MessageCoders {

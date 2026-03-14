@@ -5,22 +5,28 @@ import io.github.mercurievv.home_automation.impl.TypeSystemImpl
 import io.github.mercurievv.home_automation.instances.JsonInstances.given
 import io.github.mercurievv.home_automation.mqtt.MessageCoders.*
 import io.github.mercurievv.home_automation.mqtt.Mqtt
-import io.github.mercurievv.home_automation.rules.Light
+import io.github.mercurievv.home_automation.rules.Bindings
 import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
 
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
+
 import cats.Applicative
 import cats.data.Kleisli
 import cats.implicits.*
+
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
+
 import io.circe.*
+
 import fs2.*
+
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
@@ -45,7 +51,7 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    val lights = new Light[F]()
+    val lights = new Bindings[F]()
 
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream

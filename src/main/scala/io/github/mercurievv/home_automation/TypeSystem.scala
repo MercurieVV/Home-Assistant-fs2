@@ -1,7 +1,8 @@
 package io.github.mercurievv.home_automation
 
-import cats.Functor
 import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out}
+
+import cats.Functor
 
 trait TypeSystem {
   type EventId
