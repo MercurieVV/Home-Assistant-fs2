@@ -6,6 +6,8 @@ import io.github.mercurievv.home_automation.instances.JsonInstances.given
 import io.github.mercurievv.home_automation.mqtt.MessageCoders.*
 import io.github.mercurievv.home_automation.mqtt.Mqtt
 import io.github.mercurievv.home_automation.rules.Bindings
+import io.github.mercurievv.home_automation.rules.BindingsProcessor
+import io.github.mercurievv.home_automation.rules.BindingsTooling
 import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
 
 import java.util.concurrent.atomic.AtomicReference
@@ -51,7 +53,9 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    val bindings = new Bindings[F]()
+    val bindingsTooling = new BindingsTooling[F]()
+    val bindings = Bindings.create(bindingsTooling)
+    val bindingsProcessor = new BindingsProcessor(bindings)
 
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream
@@ -64,7 +68,7 @@ class HomeAutomationsPlugin extends Plugin {
               .apply(ts)(
                 decodeMessage,
                 encodeMessage,
-                bindings.createBindings.lmap[(ts.InputEvent, ts.States)](t =>
+                bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                   (
                     t._1,
                     Kleisli((k: EntityId) => t._2(k).get.map(_.getOrElse(JsonObject.empty))),
