@@ -51,7 +51,7 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    val lights = new Bindings[F]()
+    val bindings = new Bindings[F]()
 
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream
@@ -64,7 +64,7 @@ class HomeAutomationsPlugin extends Plugin {
               .apply(ts)(
                 decodeMessage,
                 encodeMessage,
-                lights.lightSwitch.lmap[(ts.InputEvent, ts.States)](t =>
+                bindings.createBindings.lmap[(ts.InputEvent, ts.States)](t =>
                   (
                     t._1,
                     Kleisli((k: EntityId) => t._2(k).get.map(_.getOrElse(JsonObject.empty))),

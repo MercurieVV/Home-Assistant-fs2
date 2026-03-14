@@ -76,17 +76,20 @@ class Bindings[F[_]: {MonadThrow, Logger}]:
   type ActionInput = (In[(EntityId, JsonObject)], EntityId --> JsonObject)
   type ActionOutput = Option[Out[(EntityId, JsonObject)]]
 
-  val map: Map[In[EntityId], (Out[EntityId], In[JsonObject] --> Maybe[Out[JsonObject]])] = Map(
+  val map: Map[
+    In[EntityId],
+    (Out[EntityId], (EntityId --> JsonObject) => In[JsonObject] --> Maybe[Out[JsonObject]]),
+  ] = Map(
     studioLight,
   )
 
-  val lightSwitch: ActionInput --> ActionOutput =
+  val createBindings: ActionInput --> ActionOutput =
     // MessageLogger[F].info.bnk.lmap[Input](i => s"Info: $i") *>
     Kleisli[F, ActionInput, ActionOutput] { case (input, state) =>
       map
         .get(input.map(_._1))
         .map { case (outId, action) =>
-          action.apply(input.map(_._2)).map(_.toOption.map((outId, _).tupled))
+          action(state).apply(input.map(_._2)).map(_.toOption.map((outId, _).tupled))
         }
         .sequence
         .map(_.flatten)
@@ -98,22 +101,22 @@ class Bindings[F[_]: {MonadThrow, Logger}]:
     lightState.focus(_.state).modify(_.toggle).asRight[Unit]
   }
 
-  val studioLight: (In[EntityId], (Out[EntityId], (In[JsonObject]) --> Maybe[Out[JsonObject]])) =
-    bindAction[-->, Unit, LightState](StudioLightSwitch_single_right_action, Zigbee.StudioLights, ???, toggle)
+  val studioLight
+    : (In[EntityId], (Out[EntityId], (EntityId --> JsonObject) => (In[JsonObject]) --> Maybe[Out[JsonObject]])) =
+    bindAction[-->, Unit, LightState](StudioLightSwitch_single_right_action, Zigbee.StudioLights, toggle)
 
   def bindAction[-->[_, _]: ArrowChoice, Action, OutT](
     in: InputAction[Action],
     out: OutputAction[OutT],
-    states: EntityId --> JsonObject,
     decision: (OutT, Action) --> Maybe[OutT],
-  ): (In[EntityId], (Out[EntityId], In[JsonObject] --> Maybe[Out[JsonObject]])) = {
+  ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Maybe[Out[JsonObject]])) = {
     val getAction = Arrow[-->].lift(in.action).map(_.toRight(()))
     given Decoder[OutT] = out.decoder
     (
       in.id,
       (
         out.id,
-        createActionForJson[-->, In[JsonObject], Action, OutT](getAction, out.id, states, decision)
+        createActionForJson[-->, In[JsonObject], Action, OutT](getAction, out.id, _, decision)
           .map(_.map(v => Out(out.encoder.apply(v).asObject.get))),
       ),
     )
