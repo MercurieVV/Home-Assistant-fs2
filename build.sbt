@@ -33,7 +33,8 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser",
     ).map(_ % circeVersion),
-    libraryDependencies  += "io.circe" %% "circe-optics" % "0.15.0",
+    libraryDependencies  += "io.circe"      %% "circe-optics" % "0.15.0",
+    libraryDependencies  += "org.typelevel" %% "kittens"      % "3.5.0",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "discipline-munit" % "2.0.0"      % Test,
       "org.typelevel" %% "cats-laws"        % "2.12.0"     % Test,

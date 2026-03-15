@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.rules
 
-import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, OnOffState, Out}
 import io.github.mercurievv.home_automation.rules.Devices.{InputAction, OutputAction}
+import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, OnOffState, Out}
 
 import cats.MonadThrow
 import cats.arrow.{Arrow, ArrowChoice}
@@ -36,7 +36,7 @@ class BindingsTooling[F[_]: {MonadThrow, Logger}]:
   }
 
   def bindAction[-->[_, _]: ArrowChoice, Action, OutT](
-    in: InputAction[Action],
+    in: InputAction[Option[Action]],
     out: OutputAction[OutT],
     decision: (OutT, Action) --> Maybe[OutT],
   ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Maybe[Out[JsonObject]])) = {

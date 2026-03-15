@@ -33,9 +33,7 @@ object EventTypes {
   type EntityId = EntityId.Opq
 
   object OnOffState extends Opaque[Boolean]:
-
     import implicits.opqToRaw
-
     val On: OnOffState = OnOffState.apply(true)
     val Off: OnOffState = OnOffState.apply(false)
 
