@@ -71,7 +71,10 @@ class HomeAutomationsPlugin extends Plugin {
                 bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                   (
                     t._1,
-                    Kleisli((k: EntityId) => t._2(k).get.map(_.getOrElse(JsonObject.empty))),
+                    Kleisli((k: EntityId) =>
+                      println("map : " + t._2)
+                      t._2(k).get.map(_.getOrElse(JsonObject.empty)),
+                    ),
                   ),
                 ),
               )

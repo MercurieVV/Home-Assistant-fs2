@@ -8,27 +8,12 @@ import cats.arrow.{Arrow, ArrowChoice}
 import cats.data.Kleisli
 import cats.implicits.*
 
-import io.circe.{Decoder, Json, JsonObject}
+import io.circe.{Decoder, JsonObject}
 
 import monocle.syntax.all.*
 import org.typelevel.log4cats.Logger
 
 class BindingsTooling[F[_]: {MonadThrow, Logger}]:
-
-  private val decodeLightStateF =
-    Kleisli[F, JsonObject, LightState](input =>
-      Json
-        .fromJsonObject(input)
-        .as[LightState]
-        .fold(f =>
-                println(s"$f $input")
-                LightState(state = OnOffState.Off)
-              ,
-              identity,
-        )
-        .pure[F],
-    )
-
   type -->[A, B] = Kleisli[F, A, B]
 
   val toggle: (LightState, Unit) --> Maybe[LightState] = Arrow[-->].lift { case (lightState, _) =>

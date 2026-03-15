@@ -9,7 +9,7 @@ import cats.derived.semiauto
 import cats.implicits.*
 
 import io.circe.*
-import io.circe.generic.semiauto.*
+import io.circe.derivation.{Configuration, ConfiguredCodec}
 import io.circe.{Codec, JsonObject}
 
 import language.experimental.pureFunctions
@@ -53,11 +53,13 @@ object Zigbee2Mqtt:
 
 import io.github.mercurievv.monocle.circe.*
 
+given Configuration = Configuration.default.withDefaults
+
 given Codec[OnOffState] = OnOffState.prism.toCodec
-case class LightState(state: OnOffState)
-given Codec[LightState] = deriveCodec
+case class LightState(state: OnOffState = OnOffState.Off)
+given Codec[LightState] = ConfiguredCodec.derived
 case class SwitchAction(action: String)
-given Codec[SwitchAction] = deriveCodec
+given Codec[SwitchAction] = ConfiguredCodec.derived
 
 object Bindings:
 

@@ -2,13 +2,13 @@ package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out}
 
-import cats.Applicative
+import cats.ApplicativeThrow
 import cats.data.Kleisli
 import cats.implicits.*
 
 import io.circe.JsonObject
 
-class BindingsProcessor[F[_]: Applicative](
+class BindingsProcessor[F[_]: ApplicativeThrow](
   map: Map[
     In[EntityId],
     (Out[EntityId], Kleisli[F, EntityId, JsonObject] => Kleisli[F, In[JsonObject], Maybe[Out[JsonObject]]]),
@@ -27,6 +27,10 @@ class BindingsProcessor[F[_]: Applicative](
         }
         .sequence
         .map(_.flatten)
+        .handleError(e =>
+          e.printStackTrace()
+          None,
+        )
     }
 
 }

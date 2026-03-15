@@ -72,6 +72,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
         override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) => c.messages)
           .map(decodeMessage)
+          .flatMapF(v => Stream.eval(Logger[F].info(s"Decoded message ${v.toString.take(500)}").as(v)))
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
             Kleisli((oe: ts.OutputEvent) =>
