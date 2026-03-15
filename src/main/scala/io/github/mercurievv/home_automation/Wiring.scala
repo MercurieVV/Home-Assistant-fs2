@@ -9,14 +9,14 @@ import cats.arrow.{Arrow, FunctionK}
 import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.Monoid
-import cats.{Id, Monad, ~>}
+import cats.{Id, MonadThrow, ~>}
 
 import cats.effect.std.MapRef
 
 import fs2.*
 
 import net.sigusr.mqtt.api.{Message, Session}
-import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.{Logger, SelfAwareLogger}
 
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
@@ -24,7 +24,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = MapRef[F, EventId, Option[EventState]]
   }
 
-  def wire[F[_]: {Monad, Logger}](
+  def wire[F[_]: {MonadThrow, SelfAwareLogger}](
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
@@ -57,12 +57,15 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type EP = EventProcessing[-->, EPTTS]
     given Kleisli[Id, (ts.States, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
       import epti.*
-      val value: InputEvent --> (ts.States, InputEvent) = Arrow[-->].lift(_ => mapRef) &&& Arrow[-->].id
+      val inputWithStates: InputEvent --> (ts.States, InputEvent) = Arrow[-->].lift(_ => mapRef) &&& Arrow[-->].id
       new EventProcessing[-->, EPTTS](
         t            = epti,
-        updateState  = (value >>> stateUpdate.apply).as(mapRef),
+        updateState  = (inputWithStates >>> stateUpdate.apply).as(mapRef),
         makeDecision = decisionMaking,
-      )
+      ) {
+        override lazy val run = super.run
+          .handleErrorWith(e => Kleisli.liftF(SelfAwareLogger[F].error(e)("Error during event processing").as(None)))
+      }
     }
 
     type ESP = EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP]
