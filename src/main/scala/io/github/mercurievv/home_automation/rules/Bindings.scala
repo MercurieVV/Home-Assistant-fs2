@@ -76,5 +76,10 @@ object Bindings:
         Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
         toggle,
       ),
+      bindAction[-->, Unit, LightState](
+        Zigbee2Mqtt.d("Kids room switch").iao[SwitchAction].map(_.map(_.action == "single_left").ifM(Some(()), None)),
+        Zigbee2Mqtt.d("kids_room_lights").oa[LightState],
+        toggle,
+      ),
     )
   }
