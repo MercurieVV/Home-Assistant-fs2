@@ -6,10 +6,10 @@ import cats.implicits.*
 case class EventProcessing[-->[_, _]: Arrow, T <: EventProcessing.Types](
   t: T,
   updateState: t.InputEvent --> t.States,
-  makeDecision: (t.InputEvent, t.States) --> Option[t.OutputEvent]) {
+  makeDecision: (t.InputEvent, t.States) --> t.OutputEvent) {
   import t.*
 
-  def run: InputEvent --> Option[OutputEvent] = (Arrow[-->].id &&& updateState) >>> makeDecision
+  def run: InputEvent --> OutputEvent = (Arrow[-->].id &&& updateState) >>> makeDecision
 }
 
 object EventProcessing:
@@ -41,7 +41,7 @@ trait EventsStreamProcessing[
     Arrow[==>].lift { case (inputEvent, publish) =>
       (
         inputEvent,
-        ep.run.map(Either.fromOption(_, ())) >>> (Arrow[-->].id[Unit] ||| publish),
+        ep.run >>> publish,
       )
     }
 }

@@ -14,7 +14,7 @@ import io.circe.{Codec, JsonObject}
 
 import language.experimental.pureFunctions
 
-type Maybe[A] = Either[Unit, A]
+type Maybe[A] = List[A]
 
 object Devices:
 
@@ -63,23 +63,28 @@ given Codec[SwitchAction] = ConfiguredCodec.derived
 
 object Bindings:
 
-  def create[F[_]: Monad](bt: BindingsTooling[F]): Map[
+  def create[F[_]: Monad, S[_]: Functor](bt: BindingsTooling[[a] =>> F[S[a]]])(using Monad[[a] =>> F[S[a]]]): Map[
     In[EntityId],
-    (Out[EntityId], Kleisli[F, EntityId, JsonObject] => Kleisli[F, In[JsonObject], Maybe[Out[JsonObject]]]),
+    List[
+      (
+        Out[EntityId],
+        Kleisli[[a] =>> F[S[a]], EntityId, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
+      ),
+    ],
   ] = {
     import bt.*
-    type -->[a, b] = Kleisli[F, a, b]
+    type -->[a, b] = Kleisli[[a] =>> F[S[a]], a, b]
 
-    Map(
-      bindAction[-->, Unit, LightState](
+    List(
+      bindStatefulAction[-->, Unit, LightState](
         Zigbee2Mqtt.d("Bedroom switch").iao[SwitchAction].map(_.map(_.action == "single_left").ifM(Some(()), None)),
         Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
         toggle,
       ),
-      bindAction[-->, Unit, LightState](
+      bindStatefulAction[-->, Unit, LightState](
         Zigbee2Mqtt.d("Kids room switch").iao[SwitchAction].map(_.map(_.action == "single_left").ifM(Some(()), None)),
         Zigbee2Mqtt.d("kids_room_lights").oa[LightState],
         toggle,
       ),
-    )
+    ).groupMap(_._1)(_._2)
   }

@@ -1,5 +1,6 @@
 package io.github.mercurievv.home_automation
 
+import io.github.mercurievv.cats.composeMonads
 import io.github.mercurievv.home_automation.Wiring
 import io.github.mercurievv.home_automation.impl.TypeSystemImpl
 import io.github.mercurievv.home_automation.instances.JsonInstances.given
@@ -15,17 +16,15 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
 
-import cats.Applicative
 import cats.data.Kleisli
 import cats.implicits.*
+import cats.{Applicative, Monad, ~>}
 
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
-
-import io.circe.*
 
 import fs2.*
 
@@ -53,9 +52,13 @@ class HomeAutomationsPlugin extends Plugin {
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-    val bindingsTooling = new BindingsTooling[F]()
-    val bindings = Bindings.create(bindingsTooling)
-    val bindingsProcessor = new BindingsProcessor(bindings)
+    type FL[a] = F[List[a]]
+
+    given Monad[FL] = composeMonads[F, List]
+    val bindingsTooling = new BindingsTooling[FL]()
+    val bindings = Bindings.create[F, List](bindingsTooling)
+    val bindingsProcessor =
+      new BindingsProcessor[F, List](new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }, bindings)
 
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream
@@ -64,16 +67,16 @@ class HomeAutomationsPlugin extends Plugin {
 
           Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
             Wiring
-              .wire[F]
+              .wire[F, List]
               .apply(ts)(
                 decodeMessage,
                 encodeMessage,
                 bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                   (
                     t._1,
-                    Kleisli((k: EntityId) =>
+                    Kleisli[FL, EntityId, ts.EventState]((k: EntityId) =>
                       println("map : " + t._2)
-                      t._2(k).get.map(_.getOrElse(JsonObject.empty)),
+                      t._2(k).get.flatMap(_.toList.pure[F]),
                     ),
                   ),
                 ),

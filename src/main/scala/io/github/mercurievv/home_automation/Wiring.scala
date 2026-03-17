@@ -9,7 +9,7 @@ import cats.arrow.{Arrow, FunctionK}
 import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.Monoid
-import cats.{Id, MonadThrow, ~>}
+import cats.{Applicative, Id, Monad, MonadThrow, ~>}
 
 import cats.effect.std.MapRef
 
@@ -24,47 +24,51 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = MapRef[F, EventId, Option[EventState]]
   }
 
-  def wire[F[_]: {MonadThrow, SelfAwareLogger}](
+  def wire[F[_]: {MonadThrow, SelfAwareLogger}, SQ[_]: Applicative](
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
     encodeMessage: ts.OutputEvent => Message,
-    decisionMaking: Kleisli[F, (ts.InputEvent, ts.States), Option[ts.OutputEvent]],
+    decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
   )(using MES: Monoid[ts.EventState],
+    MFS: Monad[[a] =>> F[SQ[a]]],
   ): Kleisli[
     Stream[F, _],
     ((ts.type, ts.States), Session[F]),
-    (ts.InputEvent, Kleisli[F, ts.InputEvent, Unit]),
+    (ts.InputEvent, Kleisli[[a] =>> F[SQ[a]], ts.InputEvent, Unit]),
   ] = {
+    type FS[a] = F[SQ[a]]
     type TS = ts.type
     val tw = new TypesWiring[F, ts.type](ts)
     import tw.*
     val epti = eventProcessingTypes
     val espti = eventStreamProcessingTypes
 
-    type -->[A, B] = Kleisli[F, A, B]
+    type -->[A, B] = Kleisli[FS, A, B]
     type S[b] = Stream[F, b]
     type ==>[A, B] = Kleisli[S, A, B]
 
-    type StateUpdateTSI = StateUpdateTS[-->, ts.States]
+    type StateUpdateTSI = StateUpdateTS[Kleisli[F, *, *], ts.States]
     given Kleisli[Id, TS, StateUpdateTSI] = Kleisli[Id, TS, StateUpdateTSI]((ts: TS) =>
       StateUpdate.refMapStateUpdate[F, ts.InputEvent, ts.EventId, ts.EventState, ts.States](
-        getEventId     = Arrow[-->].lift(_.eventId.value),
-        getEntityState = Arrow[-->].lift(_.eventState.value),
+        getEventId     = Arrow[Kleisli[F, *, *]].lift(_.eventId.value),
+        getEntityState = Arrow[Kleisli[F, *, *]].lift(_.eventState.value),
       ),
     )
 
     type EP = EventProcessing[-->, EPTTS]
     given Kleisli[Id, (ts.States, StateUpdateTSI), EP] = Kleisli { case (mapRef, stateUpdate) =>
       import epti.*
-      val inputWithStates: InputEvent --> (ts.States, InputEvent) = Arrow[-->].lift(_ => mapRef) &&& Arrow[-->].id
+      type ~~>[a, b] = Kleisli[F, a, b]
+      val inputEventWithStates: InputEvent ~~> (ts.States, InputEvent) = Arrow[~~>].lift(_ => mapRef) &&& Arrow[~~>].id
+      val f2fs: F ~> FS = new (F ~> FS) { def apply[A](fa: F[A]) = fa.map(_.pure) }
       new EventProcessing[-->, EPTTS](
         t            = epti,
-        updateState  = (inputWithStates >>> stateUpdate.apply).as(mapRef),
+        updateState  = (inputEventWithStates >>> stateUpdate.apply).as(mapRef).mapK(f2fs),
         makeDecision = decisionMaking,
       ) {
-        override lazy val run = super.run
-          .handleErrorWith(e => Kleisli.liftF(SelfAwareLogger[F].error(e)("Error during event processing").as(None)))
+//        override lazy val run = super.run //fixme restore process errors
+//          .handleErrorWith(e => Kleisli.liftF(SelfAwareLogger[F].error(e)("Error during event processing")))
       }
     }
 
@@ -78,10 +82,10 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
           .flatMapF(v => Stream.eval(Logger[F].info(s"Decoded message ${v.toString.take(500)}").as(v)))
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
-            Kleisli((oe: ts.OutputEvent) =>
+            Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
               val msg = encodeMessage(oe)
-              producer.publish(msg.topic, msg.payload),
-            ).pure,
+              producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
+            ).pure[S],
           )
       },
     )

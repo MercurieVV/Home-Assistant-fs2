@@ -18,16 +18,19 @@ object EventTypes {
       override def pure[A](x: A): In[A] = x
       override def ap[A, B](ff: In[A => B])(fa: In[A]): In[B] = ff(fa)
 
-  opaque type Out[a] = a
+  object Out extends OpaqueFunctor
+  type Out[a] = Out.F[a]
 
-  object Out:
-    def apply[A](a: A): Out[A] = a
-    def unapply[A](a: Out[A]): A = a
-    extension [A](o: Out[A]) def value: A = o
+  opaque type St[a] = a
 
-    given Applicative[Out] = new Applicative[Out]:
-      override def pure[A](x: A): Out[A] = x
-      override def ap[A, B](ff: Out[A => B])(fa: Out[A]): Out[B] = ff(fa)
+  object St: // entity from state holder
+    def apply[A](a: A): St[A] = a
+    def unapply[A](a: St[A]): A = a
+    extension [A](o: St[A]) def value: A = o
+
+    given Applicative[St] = new Applicative[St]:
+      override def pure[A](x: A): St[A] = x
+      override def ap[A, B](ff: St[A => B])(fa: St[A]): St[B] = ff(fa)
 
   object EntityId extends Opaque[String]
   type EntityId = EntityId.Opq
@@ -50,4 +53,14 @@ object EventTypes {
     }
 
   type OnOffState = OnOffState.Opq
+
+  trait OpaqueFunctor:
+    opaque type F[a] = a
+    def apply[A](a: A): F[A] = a
+    def unapply[A](a: F[A]): A = a
+    extension [A](o: F[A]) def value: A = o
+
+    given Applicative[F] = new Applicative[F]:
+      override def pure[A](x: A): F[A] = x
+      override def ap[A, B](ff: F[A => B])(fa: F[A]): F[B] = ff(fa)
 }
