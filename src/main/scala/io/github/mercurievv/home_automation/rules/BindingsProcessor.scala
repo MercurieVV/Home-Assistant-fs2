@@ -10,7 +10,7 @@ import io.circe.JsonObject
 
 class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
   o2S: Option ~> S,
-  map: Map[
+  actionsMap: Map[
     In[EntityId],
     S[
       (
@@ -27,10 +27,19 @@ class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
   val processBindings: ActionInput --> ActionOutput =
     // MessageLogger[F].info.bnk.lmap[Input](i => s"Info: $i") *>
     Kleisli[[a] =>> F[S[a]], ActionInput, ActionOutput] { case (input, state) =>
-      o2S(map.get(input.map(_._1))).flatten
+      o2S(actionsMap.get(input.map(_._1))).flatten
         .map { case (outId, action) =>
+//          println(s"AA $outId $action")
           val inJson = input.map(_._2)
-          action(state).apply(inJson).map(_.map((outId, _).tupled))
+//          println(s"BB $inJson")
+          action(state)
+            .apply(inJson)
+            .map(
+              _.map(v =>
+//              println(s"CC $v")
+                (outId, v).tupled,
+              ),
+            )
         }
         .sequence
         .map(_.flatten)

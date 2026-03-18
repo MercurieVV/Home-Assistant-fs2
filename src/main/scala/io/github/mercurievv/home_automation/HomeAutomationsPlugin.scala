@@ -1,5 +1,6 @@
 package io.github.mercurievv.home_automation
 
+import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.cats.composeMonads
 import io.github.mercurievv.home_automation.Wiring
 import io.github.mercurievv.home_automation.impl.TypeSystemImpl
@@ -25,6 +26,8 @@ import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.{Console, MapRef}
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
+
+import io.circe.JsonObject
 
 import fs2.*
 
@@ -74,10 +77,7 @@ class HomeAutomationsPlugin extends Plugin {
                 bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                   (
                     t._1,
-                    Kleisli[FL, EntityId, ts.EventState]((k: EntityId) =>
-                      println("map : " + t._2)
-                      t._2(k).get.flatMap(_.toList.pure[F]),
-                    ),
+                    ((k: EntityId) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
                   ),
                 ),
               )

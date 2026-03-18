@@ -10,9 +10,7 @@ lazy val root = (project in file("."))
   .settings(
     name           := "KnnHomeAutomations",
     scalacOptions ++= Seq(
-      "-Ykind-projector:underscores",
-      "-rewrite",
-      "-source 3.0-migration",
+      "-Xkind-projector:underscores",
       "-source:future",
       "-language:experimental.modularity",
       "-Wunused:imports",
@@ -33,7 +31,8 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser",
     ).map(_ % circeVersion),
-    libraryDependencies  += "io.circe"      %% "circe-optics" % "0.15.0",
+    libraryDependencies  += "io.circe"      %% "circe-optics"   % "0.15.0",
+    libraryDependencies  += "dev.optics"   %% "monocle-macro"  % "3.3.0",
     libraryDependencies  += "org.typelevel" %% "kittens"      % "3.5.0",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "discipline-munit" % "2.0.0"      % Test,
@@ -58,6 +57,9 @@ lazy val root = (project in file("."))
       ).!(ProcessLogger(println, System.err.println))
       if (exitCode != 0) sys.error(s"Deploy failed with exit code $exitCode")
     },
+
+    // Make Provided deps available when running locally via `sbt run`
+    Runtime / unmanagedClasspath ++= update.value.select(configurationFilter("provided")).map(Attributed.blank),
 
     // Fat JAR name
     assembly / assemblyJarName := s"${name.value}-${version.value}.jar",

@@ -2,38 +2,59 @@ package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.minuscles.opaques.Opaque
 
+import scala.compiletime.*
+import scala.deriving.*
+
 import cats.Applicative
 
-import monocle.{Iso, Prism}
+import monocle.{Iso, Lens, Prism}
 
 object EventTypes {
-  opaque type In[a] = a
 
-  object In:
-    def apply[A](a: A): In[A] = a
-    def unapply[A](a: In[A]): A = a
-    extension [A](o: In[A]) def value: A = o
-
-    given Applicative[In] = new Applicative[In]:
-      override def pure[A](x: A): In[A] = x
-      override def ap[A, B](ff: In[A => B])(fa: In[A]): In[B] = ff(fa)
+  object In extends OpaqueFunctor
+  type In[a] = In.F[a]
 
   object Out extends OpaqueFunctor
   type Out[a] = Out.F[a]
 
-  opaque type St[a] = a
-
-  object St: // entity from state holder
-    def apply[A](a: A): St[A] = a
-    def unapply[A](a: St[A]): A = a
-    extension [A](o: St[A]) def value: A = o
-
-    given Applicative[St] = new Applicative[St]:
-      override def pure[A](x: A): St[A] = x
-      override def ap[A, B](ff: St[A => B])(fa: St[A]): St[B] = ff(fa)
+  object St extends OpaqueFunctor // entity from state holder
+  type St[a] = St.F[a]
 
   object EntityId extends Opaque[String]
   type EntityId = EntityId.Opq
+
+  trait Toggleable[A]:
+    extension (a: A) def toggle: A
+
+  object Toggleable:
+    inline def apply[A](using t: Toggleable[A]): Toggleable[A] = t
+
+    def fromLens[A, B: Toggleable](l: Lens[A, B]): Toggleable[A] = new Toggleable[A]:
+      val mod = l.modify(Toggleable[B].toggle)
+      extension (a: A)
+        def toggle: A =
+          mod(a)
+
+    private inline def summonCases[T <: Tuple]: List[Any] =
+      inline erasedValue[T] match
+        case _: EmptyTuple => Nil
+        case _: (h *: t)   => summonInline[ValueOf[h]].value :: summonCases[t]
+
+    private def fromCases[A](
+      allCases: List[A],
+      ordinal: A => Int,
+    ): Toggleable[A] =
+      new Toggleable[A]:
+        extension (a: A) def toggle: A = allCases((ordinal(a) + 1) % allCases.size)
+
+    inline def derived[A](using m: Mirror.SumOf[A]): Toggleable[A] =
+      fromCases(summonCases[m.MirroredElemTypes].asInstanceOf[List[A]], m.ordinal)
+
+  enum Closeable:
+    case OPEN, CLOSE, STOP
+
+  given Toggleable[OnOffState]:
+    extension (a: OnOffState) def toggle: OnOffState = OnOffState.toggle(a)
 
   object OnOffState extends Opaque[Boolean]:
     import implicits.opqToRaw

@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.home_automation.rules.Devices.{InputAction, OutputAction}
-import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, OnOffState, Out, St}
+import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out, St, Toggleable}
 
 import cats.Monad
 import cats.arrow.{Arrow, ArrowChoice}
@@ -10,17 +10,15 @@ import cats.implicits.*
 
 import io.circe.{Decoder, JsonObject}
 
-import monocle.syntax.all.*
-
 class BindingsTooling[F[_]: Monad]:
   type -->[A, B] = Kleisli[F, A, B]
 
-  val toggle: (St[LightState], Unit) --> Out[LightState] = Arrow[-->].lift { case (lightState, _) =>
-    Out(lightState.value.focus(_.state).modify(_.toggle))
+  def toggle[T: Toggleable]: (St[T], Unit) --> Out[T] = Arrow[-->].lift { case (toggleable, _) =>
+    Out(toggleable.value.toggle)
   }
 
-  def bindStatefulAction[-->[_, _]: ArrowChoice, Action, T](
-    in: InputAction[Action],
+  def bindStatefulAction[-->[_, _]: Arrow, Action, T](
+    in: InputAction[In[JsonObject] --> Action],
     out: OutputAction[T],
     decision: (St[T], Action) --> Out[T],
   ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Out[JsonObject])) =
@@ -30,12 +28,16 @@ class BindingsTooling[F[_]: Monad]:
       Arrow[-->].lift[T, St[T]](St.apply).first >>> decision >>> Arrow[-->].lift[Out[T], T](_.value),
     )
 
-  def bindAction[-->[_, _]: ArrowChoice, Action, OutT](
-    in: InputAction[Action],
+  def bindAction[-->[_, _]: Arrow, Action, OutT](
+    in: InputAction[In[JsonObject] --> Action],
     out: OutputAction[OutT],
     decision: (OutT, Action) --> OutT,
   ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Out[JsonObject])) = {
-    val getAction = Arrow[-->].lift(in.action)
+    val getAction = in.action
+      .map(v =>
+        println(s"GG $v")
+        v,
+      )
     given Decoder[OutT] = out.decoder
     (
       in.id,
@@ -47,7 +49,7 @@ class BindingsTooling[F[_]: Monad]:
     )
   }
 
-  def createActionForJson[-->[_, _]: ArrowChoice, Input, Action, Output: Decoder](
+  def createActionForJson[-->[_, _]: Arrow, Input, Action, Output: Decoder](
     filter: Input --> Action,
     outputId: Out[EntityId],
     getOutState: EntityId --> JsonObject,
@@ -60,7 +62,7 @@ class BindingsTooling[F[_]: Monad]:
     decision,
   )
 
-  def createAction[-->[_, _]: ArrowChoice, Input, Action, StateOut, Output](
+  def createAction[-->[_, _]: Arrow, Input, Action, StateOut, Output](
     filter: Input --> Action,
     outputId: Out[EntityId],
     getOutState: EntityId --> StateOut,
@@ -71,7 +73,10 @@ class BindingsTooling[F[_]: Monad]:
       outputId.pure[-->[Action, *]] >>> Arrow[-->].lift(_.value) >>> getOutState >>> Arrow[-->]
         .lift(convert)
     val fullProcess: Input --> Output =
-      filter >>> (
+      filter.map(v =>
+        println(s"EE $v")
+        v,
+      ) >>> (
         (prepare &&& Arrow[-->].id[Action]) >>> decision
       ) // .map(_.flatten)
     fullProcess
