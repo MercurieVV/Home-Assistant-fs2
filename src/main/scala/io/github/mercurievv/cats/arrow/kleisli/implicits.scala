@@ -19,6 +19,8 @@ object K:
 
 extension [B](b: B) inline def kp[F[_]: Applicative, A]: K[F, A, B] = Kleisli.pure[F, A, B](b)
 
+extension [F[_], B](b: F[B]) inline def k[A]: K[F, A, B] = Kleisli.liftF[F, A, B](b)
+
 extension [A, F[_], B](f: A -> F[B]) inline def k: K[F, A, B] = Kleisli(f)
 
 extension [F[_], A, B](f: (=> A) => F[B])

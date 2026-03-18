@@ -56,12 +56,14 @@ class HomeAutomationsPlugin extends Plugin {
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
     type FL[a] = F[List[a]]
-
+    val o2l = new (Option ~> List) {
+      def apply[A](fa: Option[A]) = fa.toList
+    }
     given Monad[FL] = composeMonads[F, List]
     val bindingsTooling = new BindingsTooling[FL]()
-    val bindings = Bindings.create[F, List](bindingsTooling)
-    val bindingsProcessor =
-      new BindingsProcessor[F, List](new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }, bindings)
+    val bindings = Bindings.create[F, List](bindingsTooling, o2l)
+
+    val bindingsProcessor = new BindingsProcessor[F, List](o2l, bindings)
 
     MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
       Stream

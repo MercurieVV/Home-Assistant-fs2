@@ -4,7 +4,7 @@ import io.github.mercurievv.home_automation.rules.Devices.{InputAction, OutputAc
 import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out, St, Toggleable}
 
 import cats.Monad
-import cats.arrow.{Arrow, ArrowChoice}
+import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.implicits.*
 

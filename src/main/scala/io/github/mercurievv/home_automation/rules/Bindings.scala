@@ -2,15 +2,16 @@ package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.home_automation.rules.EventTypes.{Closeable, EntityId, In, OnOffState, Out, Toggleable}
-import cats.{Applicative, Functor, Monad, MonoidK, ~>}
-import cats.arrow.Arrow
+
 import cats.data.Kleisli
 import cats.derived.semiauto
 import cats.implicits.*
-import cats.kernel.Monoid
+import cats.{Applicative, Functor, Monad, MonoidK, ~>}
+
 import io.circe.*
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import io.circe.{Codec, JsonObject}
+
 import monocle.macros.GenLens
 
 import language.experimental.pureFunctions
@@ -65,26 +66,32 @@ case class LightState(state: OnOffState = OnOffState.Off)
 given Codec[LightState] = ConfiguredCodec.derived
 given Toggleable[LightState] = Toggleable.fromLens(GenLens[LightState](_.state))
 
-given Codec[Closeable] = ConfiguredCodec.derived
+given Codec[Closeable] = Codec.from(
+  Decoder.decodeString.emap(s => Closeable.values.find(_.toString == s).toRight(s"Unknown Closeable value: $s")),
+  Encoder.encodeString.contramap(_.toString),
+)
 
 case class BlindsState(
   state: Closeable = Closeable.STOP,
-  position: Int = 100)
+  position: Int = 99)
 given Codec[BlindsState] = ConfiguredCodec.derived
 
 given Toggleable[BlindsState] = new Toggleable[BlindsState]:
+  val doOpen = BlindsState(Closeable.OPEN, 99)
+  val doClose = BlindsState(Closeable.CLOSE, 0)
   extension (a: BlindsState)
     def toggle: BlindsState = a match {
       case BlindsState(Closeable.STOP, position) =>
-        if position > 50 then BlindsState(Closeable.OPEN, 100)
-        else BlindsState(Closeable.CLOSE, 0)
-      case _ => a
+        if position < 50 then doOpen else doClose
+      case BlindsState(Closeable.OPEN, _)  => doClose
+      case BlindsState(Closeable.CLOSE, _) => doOpen
     }
 
 case class SwitchAction(action: String)
 given Codec[SwitchAction] = ConfiguredCodec.derived
 
 object Bindings:
+
   def create[F[_]: Applicative, S[_]: Applicative](
     bt: BindingsTooling[[a] =>> F[S[a]]],
     o2s: Option ~> S,
@@ -108,10 +115,8 @@ object Bindings:
           .d("Bedroom switch")
           .iao[F, S, SwitchAction](o2s)
           .map(
-            _.map(_.action == "single_left").flatMapF(v =>
-              if v then ().pure[S].pure[F]
-              else MSU.empty.pure[F],
-            ),
+            _.map(_.action == "single_left")
+              .ifM(().pure[S].pure[F].k, MSU.empty.pure[F].k),
           ),
         Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
         toggle,
@@ -140,6 +145,19 @@ object Bindings:
             ),
           ),
         Zigbee2Mqtt.d("kids_room_lights").oa[LightState],
+        toggle,
+      ),
+      bindStatefulAction[-->, Unit, BlindsState](
+        Zigbee2Mqtt
+          .d("Kids room switch")
+          .iao[F, S, SwitchAction](o2s)
+          .map(
+            _.map(_.action == "single_right").flatMapF(v =>
+              if v then ().pure[S].pure[F]
+              else MSU.empty.pure[F],
+            ),
+          ),
+        Zigbee2Mqtt.d("Kids room blinds").oa[BlindsState],
         toggle,
       ),
     ).groupMap(_._1)(_._2)
