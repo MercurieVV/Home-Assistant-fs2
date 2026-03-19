@@ -31,13 +31,17 @@ import io.circe.JsonObject
 
 import fs2.*
 
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.joran.JoranConfigurator
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
+import org.slf4j.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, SelfAwareLogger, SelfAwareStructuredLogger}
 
 class HomeAutomationsPlugin extends Plugin {
+  reconfigureLogback()
   given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
   private var runtime: IORuntime = uninitialized
@@ -96,6 +100,28 @@ class HomeAutomationsPlugin extends Plugin {
         .drain
     }
   }
+
+  private def reconfigureLogback(): Unit =
+    val factory = LoggerFactory.getILoggerFactory
+    System.err.println(s"[Plugin-logback] factory=${factory.getClass.getName} cl=${factory.getClass.getClassLoader}")
+    factory match
+      case context: LoggerContext =>
+        val url = getClass.getResource("/logback.xml")
+        System.err.println(s"[Plugin-logback] logback.xml url=$url")
+        if url != null then
+          val configurator = new JoranConfigurator()
+          configurator.setContext(context)
+          context.reset()
+          try
+            configurator.doConfigure(url)
+            System.err.println(
+              s"[Plugin-logback] configured OK, appenders=${context.getLogger("root").iteratorForAppenders().hasNext}",
+            )
+          catch case e: Exception => System.err.println(s"[Plugin-logback] doConfigure failed: $e")
+        else System.err.println(s"[Plugin-logback] logback.xml NOT found in plugin classpath!")
+      case other =>
+        System.err.println(s"[Plugin-logback] factory is NOT LoggerContext: ${other.getClass.getName}")
+        System.err.println(s"[Plugin-logback] plugin LoggerContext cl: ${classOf[LoggerContext].getClassLoader}")
 
   override def start(): Unit = {
     runtime = IORuntime.builder().build()
