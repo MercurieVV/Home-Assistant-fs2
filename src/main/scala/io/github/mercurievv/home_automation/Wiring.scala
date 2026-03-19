@@ -16,7 +16,7 @@ import cats.effect.std.MapRef
 import fs2.*
 
 import net.sigusr.mqtt.api.{Message, Session}
-import org.typelevel.log4cats.{Logger, SelfAwareLogger}
+import org.typelevel.log4cats.StructuredLogger
 
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
@@ -24,7 +24,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = MapRef[F, EventId, Option[EventState]]
   }
 
-  def wire[F[_]: {MonadThrow, SelfAwareLogger}, SQ[_]: Applicative](
+  def wire[F[_]: {MonadThrow, StructuredLogger}, SQ[_]: Applicative](
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
@@ -79,7 +79,14 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
         override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) => c.messages)
           .map(decodeMessage)
-          .flatMapF(v => Stream.eval(Logger[F].info(s"Decoded message ${v.toString.take(500)}").as(v)))
+          .flatMapF(v =>
+            Stream.eval(
+              StructuredLogger[F]
+                .addContext(Map("EntityId" -> v.value._1.toString))
+                .info(s"Decoded message ${v.toString.take(500)}")
+                .as(v),
+            ),
+          )
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
             Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>

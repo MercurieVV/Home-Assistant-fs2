@@ -29,17 +29,10 @@ class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
     Kleisli[[a] =>> F[S[a]], ActionInput, ActionOutput] { case (input, state) =>
       o2S(actionsMap.get(input.map(_._1))).flatten
         .map { case (outId, action) =>
-//          println(s"AA $outId $action")
           val inJson = input.map(_._2)
-//          println(s"BB $inJson")
           action(state)
             .apply(inJson)
-            .map(
-              _.map(v =>
-//              println(s"CC $v")
-                (outId, v).tupled,
-              ),
-            )
+            .map(_.map((outId, _).tupled))
         }
         .sequence
         .map(_.flatten)

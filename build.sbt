@@ -1,5 +1,6 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
+
 lazy val deploy = taskKey[Unit]("Deploy fat jar to Home Assistant addon")
 
 ThisBuild / scalaVersion := "3.8.1"
@@ -22,6 +23,8 @@ lazy val root = (project in file("."))
       "org.typelevel"                  %% "cats-effect"         % "3.6.3",
       "org.typelevel"                  %% "log4cats-slf4j"      % "2.7.1",
       "ch.qos.logback"                  % "logback-classic"     % "1.5.18",
+      "org.influxdb"                    % "influxdb-java"       % "2.25",
+      "com.github.loki4j"               % "loki-logback-appender" % "1.5.2",
       "net.sigusr"                     %% "examples"            % "1.0.1",
       "io.github.mercurievv.minuscles" %% "tuples_transformers" % "0.1.0",
       "io.github.mercurievv.minuscles" %% "opaques"             % "0.1.1",

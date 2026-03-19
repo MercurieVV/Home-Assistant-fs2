@@ -192,7 +192,7 @@ object Mqtt {
           // 8883,
           // tlsConfig = Some(TLSConfig(TLSContextKind.System)),
           retryConfig   = retryConfig,
-          traceMessages = true,
+          traceMessages = false,
         )
 
       val sessionConfig =

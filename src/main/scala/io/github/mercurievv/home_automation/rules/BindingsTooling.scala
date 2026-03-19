@@ -33,17 +33,12 @@ class BindingsTooling[F[_]: Monad]:
     out: OutputAction[OutT],
     decision: (OutT, Action) --> OutT,
   ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Out[JsonObject])) = {
-    val getAction = in.action
-      .map(v =>
-        println(s"GG $v")
-        v,
-      )
     given Decoder[OutT] = out.decoder
     (
       in.id,
       (
         out.id,
-        createActionForJson[-->, In[JsonObject], Action, OutT](getAction, out.id, _, decision)
+        createActionForJson[-->, In[JsonObject], Action, OutT](in.action, out.id, _, decision)
           .map(v => Out(out.encoder.apply(v).asObject.get)),
       ),
     )
@@ -73,10 +68,7 @@ class BindingsTooling[F[_]: Monad]:
       outputId.pure[-->[Action, *]] >>> Arrow[-->].lift(_.value) >>> getOutState >>> Arrow[-->]
         .lift(convert)
     val fullProcess: Input --> Output =
-      filter.map(v =>
-        println(s"EE $v")
-        v,
-      ) >>> (
+      filter >>> (
         (prepare &&& Arrow[-->].id[Action]) >>> decision
       ) // .map(_.flatten)
     fullProcess

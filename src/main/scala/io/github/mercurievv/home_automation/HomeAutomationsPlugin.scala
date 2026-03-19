@@ -35,17 +35,17 @@ import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import org.typelevel.log4cats.{Logger, SelfAwareLogger}
+import org.typelevel.log4cats.{Logger, SelfAwareLogger, SelfAwareStructuredLogger}
 
 class HomeAutomationsPlugin extends Plugin {
-  given SelfAwareLogger[IO] = Slf4jLogger.getLogger[IO]
+  given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
 
   private var runtime: IORuntime = uninitialized
 
   private val fiberRef: AtomicReference[Option[FiberIO[Unit]]] =
     new AtomicReference[Option[FiberIO[Unit]]](None)
 
-  def programmF[F[_]: {SelfAwareLogger, Async, Console, Applicative}]: F[Unit] = {
+  def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative}]: F[Unit] = {
     val ts = new TypeSystemImpl[F]
     val pluginResources: Resource[F, (Mqtt.MqttSettings, Session[F])] = Mqtt
       .loadSettings[F]
