@@ -16,7 +16,7 @@ import cats.effect.std.MapRef
 import fs2.*
 
 import net.sigusr.mqtt.api.{Message, Session}
-import org.typelevel.log4cats.StructuredLogger
+import org.typelevel.log4cats.{SelfAwareStructuredLogger, StructuredLogger}
 
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
@@ -24,7 +24,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = MapRef[F, EventId, Option[EventState]]
   }
 
-  def wire[F[_]: {MonadThrow, StructuredLogger}, SQ[_]: Applicative](
+  def wire[F[_]: {MonadThrow, SelfAwareStructuredLogger}, SQ[_]: Applicative](
     ts: TypeSystemWithStates[F],
   )(
     decodeMessage: Message => ts.InputEvent,
@@ -66,10 +66,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
         t            = epti,
         updateState  = (inputEventWithStates >>> stateUpdate.apply).as(mapRef).mapK(f2fs),
         makeDecision = decisionMaking,
-      ) {
-//        override lazy val run = super.run //fixme restore process errors
-//          .handleErrorWith(e => Kleisli.liftF(SelfAwareLogger[F].error(e)("Error during event processing")))
-      }
+      )
     }
 
     type ESP = EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP]

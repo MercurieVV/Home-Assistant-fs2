@@ -88,7 +88,11 @@ class HomeAutomationsPlugin extends Plugin {
                 ),
               )
               .apply(((ts, mapRef), session))
-              .evalMap { case (inputEvent, process) => process.run(inputEvent) }
+              .evalMap { case (inputEvent, process) =>
+                process
+                  .run(inputEvent)
+                  .handleErrorWith(e => SelfAwareStructuredLogger[F].error(e)("Error during event processing").as(Nil))
+              }
               .drain
         }
         .attempts(retryPolicy)
