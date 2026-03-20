@@ -1,7 +1,9 @@
 package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.cats.arrow.kleisli.*
-import io.github.mercurievv.home_automation.rules.EventTypes.{Closeable, EntityId, In, OnOffState, Out, Toggleable}
+import io.github.mercurievv.home_automation.rules.Devices.InputAction
+import io.github.mercurievv.home_automation.rules.EventTypes.*
+import io.github.mercurievv.home_automation.rules.EventTypes.given
 
 import cats.data.Kleisli
 import cats.derived.semiauto
@@ -11,8 +13,6 @@ import cats.{Applicative, Functor, Monad, MonoidK, ~>}
 import io.circe.*
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import io.circe.{Codec, JsonObject}
-
-import monocle.macros.GenLens
 
 import language.experimental.pureFunctions
 
@@ -40,13 +40,13 @@ object Zigbee2Mqtt:
 
   case class DeviceBuilder(deviceName: String):
 
-    def iao[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)(using Monad[[a] =>> F[S[a]]])
+    def ia[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)(using Monad[[a] =>> F[S[a]]])
       : InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]] =
       InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]](
         id     = In(EntityId("zigbee2mqtt/" + deviceName)),
         action = (
           (v: In[JsonObject]) => o2S(v.value.toJson.as[T].toOption).pure[F],
-        ).k, // Option.when(fold.headOption(v.value).contains(eventValue))(()),
+        ).k,
       )
 
     def oa[T: {Decoder, Encoder}]: OutputAction[T] =
@@ -62,29 +62,32 @@ given Configuration = Configuration.default.withDefaults
 
 given Codec[OnOffState] = OnOffState.prism.toCodec
 
-case class LightState(state: OnOffState = OnOffState.Off)
+case class LightState(
+  state: OnOffState = OnOffState.Off,
+  brightness: Int = 255)
 given Codec[LightState] = ConfiguredCodec.derived
-given Toggleable[LightState] = Toggleable.fromLens(GenLens[LightState](_.state))
+
+given Toggleable[LightState] = new Toggleable[LightState]:
+  extension (ls: LightState)
+    def toggle: LightState = LightState(
+      state      = ls.state.toggle,
+      brightness = 255,
+    )
 
 given Codec[Closeable] = Codec.from(
   Decoder.decodeString.emap(s => Closeable.values.find(_.toString == s).toRight(s"Unknown Closeable value: $s")),
   Encoder.encodeString.contramap(_.toString),
 )
 
-case class BlindsState(
-  state: Closeable = Closeable.STOP,
-  position: Int = 99)
+case class BlindsState(position: Int = 0)
 given Codec[BlindsState] = ConfiguredCodec.derived
 
 given Toggleable[BlindsState] = new Toggleable[BlindsState]:
-  val doOpen = BlindsState(Closeable.OPEN, 99)
-  val doClose = BlindsState(Closeable.CLOSE, 0)
+  val doOpen = BlindsState(99)
+  val doClose = BlindsState(0)
   extension (a: BlindsState)
     def toggle: BlindsState = a match {
-      case BlindsState(Closeable.STOP, position) =>
-        if position < 50 then doOpen else doClose
-      case BlindsState(Closeable.OPEN, _)  => doClose
-      case BlindsState(Closeable.CLOSE, _) => doOpen
+      case BlindsState(position) => if position < 50 then doOpen else doClose
     }
 
 case class SwitchAction(action: String)
@@ -109,54 +112,35 @@ object Bindings:
     import bt.*
     type -->[a, b] = Kleisli[[x] =>> F[S[x]], a, b]
 
+    extension [A](sa: InputAction[In[JsonObject] --> A])
+      def toSU(f: A => Boolean): InputAction[In[JsonObject] --> Unit] = sa.map(
+        _.map(f)
+          .ifM(().pure[S].pure[F].k, MSU.empty.pure[F].k),
+      )
+
     List(
       bindStatefulAction[-->, Unit, LightState](
-        Zigbee2Mqtt
-          .d("Bedroom switch")
-          .iao[F, S, SwitchAction](o2s)
-          .map(
-            _.map(_.action == "single_left")
-              .ifM(().pure[S].pure[F].k, MSU.empty.pure[F].k),
-          ),
+        Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
         Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
         toggle,
       ),
+      bindStatefulAction[-->, Unit, LightState](
+        Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "double_left"),
+        Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
+        Out(LightState(state = OnOffState.On, brightness = 1)).pure,
+      ),
       bindStatefulAction[-->, Unit, BlindsState](
-        Zigbee2Mqtt
-          .d("Bedroom switch")
-          .iao[F, S, SwitchAction](o2s)
-          .map(
-            _.map(_.action == "single_right").flatMapF(v =>
-              if v then ().pure[S].pure[F]
-              else MSU.empty.pure[F],
-            ),
-          ),
+        Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Bedroom blinds").oa[BlindsState],
         toggle,
       ),
       bindStatefulAction[-->, Unit, LightState](
-        Zigbee2Mqtt
-          .d("Kids room switch")
-          .iao[F, S, SwitchAction](o2s)
-          .map(
-            _.map(_.action == "single_left").flatMapF(v =>
-              if v then ().pure[S].pure[F]
-              else MSU.empty.pure[F],
-            ),
-          ),
+        Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
         Zigbee2Mqtt.d("kids_room_lights").oa[LightState],
         toggle,
       ),
       bindStatefulAction[-->, Unit, BlindsState](
-        Zigbee2Mqtt
-          .d("Kids room switch")
-          .iao[F, S, SwitchAction](o2s)
-          .map(
-            _.map(_.action == "single_right").flatMapF(v =>
-              if v then ().pure[S].pure[F]
-              else MSU.empty.pure[F],
-            ),
-          ),
+        Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Kids room blinds").oa[BlindsState],
         toggle,
       ),
