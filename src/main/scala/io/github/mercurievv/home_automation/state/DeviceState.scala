@@ -32,7 +32,10 @@ case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]
     i: I,
     v: A,
     data: Data[I, A],
-  ): F[DataCache[F]] = mr.apply(i.asInstanceOf[K]).update(i => i |+| v.asInstanceOf[V].some).as(this)
+  ): F[DataCache[F]] = mr
+    .apply(i.asInstanceOf[K])
+    .update(_ |+| v.asInstanceOf[V].some)
+    .as(this)
 }
 
 object DeviceState extends Data[EntityId, JsonObject] {

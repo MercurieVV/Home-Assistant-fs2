@@ -54,7 +54,7 @@ object StateServer {
           .obj(map.toSeq.map { case (k, v) => k.toString -> v.asJson }*)
           .noSpaces
       }
-      StateServer.resource[F](8080, snapshot)
+      StateServer.resource[F](8668, snapshot)
     },
   ).k
 }

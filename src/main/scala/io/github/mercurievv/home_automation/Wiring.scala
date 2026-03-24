@@ -51,11 +51,13 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       }
 
       val apply =
-        given [a] => a --> Ref[F, MAPKV] = Ref.of[F, MAPKV](Map.empty).k
-        import DeviceStateAcessor.createStates
+        given map: -->[DataSource[F, K, V], Ref[F, MAPKV]] = Ref.of[F, MAPKV](Map.empty).k
         val stateServer = StateServer.createStateServer[F, K, V].lmap[Ref[F, MAPKV]](_.get)
 
-        summon[DataSource[F, K, V] --> (StatesT[F, K, V], Ref[F, MAPKV])].mapK(f2r) >>> stateServer
+        //        summon[DataSource[F, K, V] --> (StatesT[F, K, V], Ref[F, MAPKV])].mapK(f2r) >>> stateServer
+        ((Arrow[-->].id[DataSource[F, K, V]] &&& map) >>> (DeviceStateAcessor
+          .createStates[F, K, V]
+          .mapK(i2f) &&& Arrow[-->].id[(DataSource[F, K, V], Ref[F, Map[K, V]])].map(_._2))).mapK(f2r) >>> stateServer
           .second[StatesT[F, K, V]]
     }
     ResourceInit.apply
