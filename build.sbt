@@ -24,6 +24,7 @@ lazy val root = (project in file("."))
       "ch.qos.logback"                  % "logback-classic"       % "1.5.18",
       "org.influxdb"                    % "influxdb-java"         % "2.25",
       "com.github.loki4j"               % "loki-logback-appender" % "1.5.2",
+      "net.logstash.logback"            % "logstash-logback-encoder" % "8.0",
       "net.sigusr"                     %% "examples"              % "1.0.1",
       "io.github.mercurievv.minuscles" %% "tuples_transformers"   % "0.1.0",
       "io.github.mercurievv.minuscles" %% "opaques"               % "0.2.0",

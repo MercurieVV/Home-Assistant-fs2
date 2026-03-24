@@ -78,20 +78,22 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
         override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) => c.messages)
           .map(decodeMessage)
-          .flatMapF(v =>
+          .flatMapF { v =>
+            val messageJson = v.value._2.asJson.noSpaces
             Stream.eval(
               StructuredLogger[F]
                 .addContext(
                   Map(
-                    "event"    -> "decoded_message",
+                    "event"    -> "consuming_message",
                     "entityId" -> v.value._1.toString,
-                    "payload"  -> v.value._2.asJson.noSpaces,
                   ),
                 )
-                .info("Decoded message")
+                .info(Map("payload" -> messageJson))(
+                  s"Start consuming message. source: \"${v.value._1}\" message: ${messageJson.take(500)}",
+                )
                 .as(v),
-            ),
-          )
+            )
+          }
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
             Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
