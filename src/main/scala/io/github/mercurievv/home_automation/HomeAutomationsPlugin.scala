@@ -21,23 +21,20 @@ import scala.concurrent.duration.*
 
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.kernel.Semigroup
-import cats.mtl.Stateful
-import cats.{Applicative, Monad, ~>}
+import cats.{Applicative, Id, Monad, ~>}
 
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
-import cats.effect.std.{Console, MapRef}
+import cats.effect.std.Console
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO}
 
-import io.circe.JsonObject
+import io.circe.{Encoder, JsonObject}
 
 import fs2.*
 
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
-import fetch.{DataSource, Fetch}
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
@@ -56,10 +53,15 @@ class HomeAutomationsPlugin extends Plugin {
 
   def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative}]: F[Unit] = {
     val ts = new TypeSystemImpl[F]
-    val pluginResources: Resource[F, (Mqtt.MqttSettings, Session[F])] = Mqtt
-      .loadSettings[F]
-      .toResource
-      .mproduct(Mqtt.create[F])
+    given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
+    val pluginResources: Resource[F, ((Mqtt.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit))] =
+      Mqtt
+        .loadSettings[F]
+        .toResource
+        .mproduct(Mqtt.create[F])
+        .mproduct { case (_, session) =>
+          Wiring.wireRessources[F, ts.EventId, ts.EventState].apply(DeviceState.source[F](session))
+        }
 
     val retryPolicy: Stream[F, FiniteDuration] =
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
@@ -75,8 +77,7 @@ class HomeAutomationsPlugin extends Plugin {
 
     Stream
       .resource(pluginResources)
-      .mproduct(v => Stream.eval(createStates[F, ts.EventId, ts.EventState](DeviceState.source[F](v._2))))
-      .flatMap { case ((settings, session), states) =>
+      .flatMap { case ((settings, session), (states, _)) =>
         Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
           Wiring
             .wire[F, List]
@@ -107,21 +108,6 @@ class HomeAutomationsPlugin extends Plugin {
       .drain
 
   }
-
-  def createStates[F[_]: Async, K, V: Semigroup](deviceStateSource: DataSource[F, K, V]): F[StatesT[F, K, V]] =
-    MapRef
-      .inSingleImmutableMap[F, F, K, V]()
-      .map(mapRef =>
-        val cache = MapRefCache[F, K, V](mapRef)
-        (k: K) =>
-          new Stateful[F, Option[V]] {
-            override def monad: Monad[F] = summon
-
-            override def get: F[Option[V]] = Fetch.run(Fetch.optional[F, K, V](k, deviceStateSource), cache)
-
-            override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
-          },
-      )
 
   private def reconfigureLogback(): Unit =
     val factory = LoggerFactory.getILoggerFactory

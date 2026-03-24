@@ -1,7 +1,10 @@
 package io.github.mercurievv.home_automation
 
+import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.impl.TypesWiring
+import io.github.mercurievv.home_automation.state.DeviceStateAcessor
+import io.github.mercurievv.home_automation.state.StateServer
 import io.github.mercurievv.home_automation.state.StateUpdate
 
 import scala.language.experimental.pureFunctions
@@ -9,13 +12,17 @@ import scala.language.experimental.pureFunctions
 import cats.arrow.{Arrow, FunctionK}
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.kernel.Monoid
+import cats.kernel.{Monoid, Semigroup}
 import cats.{Applicative, Id, Monad, MonadThrow, ~>}
 
+import cats.effect.kernel.{Async, Ref, Resource}
+
+import io.circe.Encoder
 import io.circe.syntax.*
 
 import fs2.*
 
+import fetch.DataSource
 import net.sigusr.mqtt.api.{Message, Session}
 import org.typelevel.log4cats.{SelfAwareStructuredLogger, StructuredLogger}
 
@@ -24,6 +31,34 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
   type TypeSystemWithStates[F[_]] = TypeSystem {
     type States = StatesT[F, EventId, EventState]
   }
+
+  def wireRessources[F[_]: {SelfAwareStructuredLogger, Async}, K, V: {Semigroup, Encoder}](
+    using i2f: Id ~> F,
+  ): Kleisli[Resource[F, *], DataSource[F, K, V], (StatesT[F, K, V], Unit)] =
+    type RF[a] = Resource[F, a]
+    type MAPKV = Map[K, V]
+    type -->[a, b] = Kleisli[F, a, b]
+    import cats.effect.implicits.*
+
+    object ResourceInit extends BackwardAutoArrow[-->] {
+      given f2g: [F[_], G[_], a, b] => (
+        k: Kleisli[F, a, b],
+        f2g: F ~> G,
+      ) => Kleisli[G, a, b] = k.mapK(f2g)
+
+      given f2r: F ~> RF = new (F ~> RF) {
+        def apply[A](fa: F[A]) = fa.toResource
+      }
+
+      val apply =
+        given [a] => a --> Ref[F, MAPKV] = Ref.of[F, MAPKV](Map.empty).k
+        import DeviceStateAcessor.createStates
+        val stateServer = StateServer.createStateServer[F, K, V].lmap[Ref[F, MAPKV]](_.get)
+
+        summon[DataSource[F, K, V] --> (StatesT[F, K, V], Ref[F, MAPKV])].mapK(f2r) >>> stateServer
+          .second[StatesT[F, K, V]]
+    }
+    ResourceInit.apply
 
   def wire[F[_]: {MonadThrow, SelfAwareStructuredLogger}, SQ[_]: Applicative](
     ts: TypeSystemWithStates[F],

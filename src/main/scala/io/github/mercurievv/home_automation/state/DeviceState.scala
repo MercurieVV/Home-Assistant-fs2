@@ -1,21 +1,25 @@
 package io.github.mercurievv.home_automation.state
 
+import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
 
 import scala.concurrent.duration.DurationInt
 
-import cats.Monad
+import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.Semigroup
+import cats.mtl.Stateful
+import cats.{Applicative, Id, Monad}
 
-import cats.effect.kernel.Temporal
+import cats.effect.kernel.{Async, Ref, Temporal}
 import cats.effect.std.MapRef
 import cats.effect.{Concurrent, kernel}
 
 import io.circe.JsonObject
 
-import fetch.{Data, DataCache, DataSource}
+import fetch.{Data, DataCache, DataSource, Fetch}
 import net.sigusr.mqtt.api.Session
+import org.typelevel.log4cats.SelfAwareStructuredLogger
 
 case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]) extends DataCache[F] {
 
@@ -56,3 +60,36 @@ object DeviceState extends Data[EntityId, JsonObject] {
           })
     }
 }
+
+object DeviceStateAcessor:
+
+  import io.github.mercurievv.home_automation.instances.JsonInstances.given
+
+  def createDevicesDataAcessor[F[_]: {SelfAwareStructuredLogger, Async, Applicative}]: Kleisli[
+    Id,
+    (Session[F], Ref[F, Map[EntityId, JsonObject]]),
+    StatesT[F, EntityId, JsonObject],
+  ] = Kleisli { case (session, ref) =>
+    val deviceStates = DeviceState.source[F](session)
+    createStates[F, EntityId, JsonObject](deviceStates, ref)
+  }
+
+  given createStates
+    : [F[_]: Async, K, V: Semigroup] => Kleisli[Id, (DataSource[F, K, V], Ref[F, Map[K, V]]), StatesT[F, K, V]] =
+    Kleisli {
+      (
+        deviceStateSource: DataSource[F, K, V],
+        ref: Ref[F, Map[K, V]],
+      ) =>
+
+        val mapRef = MapRef.fromSingleImmutableMapRef(ref)
+        val cache = MapRefCache[F, K, V](mapRef)
+        (k: K) =>
+          new Stateful[F, Option[V]] {
+            override def monad: Monad[F] = summon
+
+            override def get: F[Option[V]] = Fetch.run(Fetch.optional[F, K, V](k, deviceStateSource), cache)
+
+            override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
+          }
+    }
