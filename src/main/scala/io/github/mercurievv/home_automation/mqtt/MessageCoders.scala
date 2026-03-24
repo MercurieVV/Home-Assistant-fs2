@@ -19,7 +19,7 @@ object MessageCoders {
 
   val encodeMessage: Out[(EntityId, JsonObject)] => Message = { case Out(eventId, eventState) =>
     Message(
-      EntityId.unwrap(eventId),
+      eventId.value,
       io.circe.Json.fromJsonObject(eventState).noSpaces.getBytes("UTF-8").toVector,
     )
   }

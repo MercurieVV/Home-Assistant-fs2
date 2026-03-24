@@ -25,7 +25,6 @@ class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
   type ActionOutput = Out[(EntityId, JsonObject)]
 
   val processBindings: ActionInput --> ActionOutput =
-    // MessageLogger[F].info.bnk.lmap[Input](i => s"Info: $i") *>
     Kleisli[[a] =>> F[S[a]], ActionInput, ActionOutput] { case (input, state) =>
       o2S(actionsMap.get(input.map(_._1))).flatten
         .map { case (outId, action) =>

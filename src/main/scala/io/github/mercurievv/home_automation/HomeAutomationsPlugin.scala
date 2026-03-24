@@ -2,6 +2,7 @@ package io.github.mercurievv.home_automation
 
 import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.cats.composeMonads
+import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.Wiring
 import io.github.mercurievv.home_automation.impl.TypeSystemImpl
 import io.github.mercurievv.home_automation.instances.JsonInstances.given
@@ -11,6 +12,7 @@ import io.github.mercurievv.home_automation.rules.Bindings
 import io.github.mercurievv.home_automation.rules.BindingsProcessor
 import io.github.mercurievv.home_automation.rules.BindingsTooling
 import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
+import io.github.mercurievv.home_automation.state.*
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -19,6 +21,8 @@ import scala.concurrent.duration.*
 
 import cats.data.Kleisli
 import cats.implicits.*
+import cats.kernel.Semigroup
+import cats.mtl.Stateful
 import cats.{Applicative, Monad, ~>}
 
 import cats.effect.implicits.*
@@ -33,6 +37,7 @@ import fs2.*
 
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
+import fetch.{DataSource, Fetch}
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
@@ -60,50 +65,63 @@ class HomeAutomationsPlugin extends Plugin {
       Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
     type FL[a] = F[List[a]]
-    val o2l = new (Option ~> List) {
-      def apply[A](fa: Option[A]) = fa.toList
-    }
+    val o2l: Option ~> List = new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }
+
     given Monad[FL] = composeMonads[F, List]
     val bindingsTooling = new BindingsTooling[FL]()
     val bindings = Bindings.create[F, List](bindingsTooling, o2l)
 
-    val bindingsProcessor = new BindingsProcessor[F, List](o2l, bindings)
+    val bindingsProcessor: BindingsProcessor[F, List] = new BindingsProcessor[F, List](o2l, bindings)
 
-    MapRef.ofSingleImmutableMap[F, ts.EventId, ts.EventState]() >>= { mapRef =>
-      Stream
-        .resource(pluginResources)
-        .flatMap { case (settings, session) =>
-
-          Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
-            Wiring
-              .wire[F, List]
-              .apply(ts)(
-                decodeMessage,
-                encodeMessage,
-                bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
-                  (
-                    t._1,
-                    ((k: EntityId) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
-                  ),
+    Stream
+      .resource(pluginResources)
+      .mproduct(v => Stream.eval(createStates[F, ts.EventId, ts.EventState](DeviceState.source[F](v._2))))
+      .flatMap { case ((settings, session), states) =>
+        Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
+          Wiring
+            .wire[F, List]
+            .apply(ts)(
+              decodeMessage,
+              encodeMessage,
+              bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
+                (
+                  t._1,
+                  ((k: EntityId) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
                 ),
-              )
-              .apply(((ts, mapRef), session))
-              .evalMap { case (inputEvent, process) =>
-                process
-                  .run(inputEvent)
-                  .handleErrorWith(e => SelfAwareStructuredLogger[F].error(e)("Error during event processing").as(Nil))
-              }
-              .drain
-        }
-        .attempts(retryPolicy)
-        .evalMap {
-          case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
-          case Right(_) => Applicative[F].unit
-        }
-        .compile
-        .drain
-    }
+              ),
+            )
+            .apply(((ts, states), session))
+            .evalMap { case (inputEvent, process) =>
+              process
+                .run(inputEvent)
+                .handleErrorWith(e => SelfAwareStructuredLogger[F].error(e)("Error during event processing").as(Nil))
+            }
+            .drain
+      }
+      .attempts(retryPolicy)
+      .evalMap {
+        case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
+        case Right(_) => Applicative[F].unit
+      }
+      .compile
+      .drain
+
   }
+
+  def createStates[F[_]: Async, K, V: Semigroup](deviceStateSource: DataSource[F, K, V]): F[StatesT[F, K, V]] =
+    MapRef
+      .inSingleImmutableMap[F, F, K, V]()
+      .map(mapRef =>
+        val cache = MapRefCache[F, K, V](mapRef)
+        (k: K) =>
+          new Stateful[F, Option[V]] {
+            override def monad: Monad[F] = summon
+
+            override def get: F[Option[V]] = Fetch.run(Fetch.optional[F, K, V](k, deviceStateSource), cache)
+
+            override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
+          },
+      )
 
   private def reconfigureLogback(): Unit =
     val factory = LoggerFactory.getILoggerFactory

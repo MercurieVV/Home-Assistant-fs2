@@ -1,12 +1,12 @@
 package io.github.mercurievv.home_automation.state
 
+import io.github.mercurievv.home_automation.TypeSystem.StatesT
+
 import cats.Monad
 import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.implicits.{catsSyntaxOptionId, catsSyntaxSemigroup, toArrowOps, toComposeOps, toStrongOps}
 import cats.kernel.Monoid
-
-import cats.effect.std.MapRef
 
 case class StateUpdate[-->[_, _]: Arrow, Event, EntityId, EntityState, States](
   getEventId: Event --> EntityId,
@@ -21,19 +21,13 @@ case class StateUpdate[-->[_, _]: Arrow, Event, EntityId, EntityState, States](
 
 object StateUpdate:
 
-  def refMapStateUpdate[
-    F[_]: Monad,
-    Event,
-    EntityId,
-    EntityState: Monoid,
-    States <: MapRef[F, EntityId, Option[EntityState]],
-  ](
+  def refMapStateUpdate[F[_]: Monad, Event, EntityId, EntityState: Monoid, States <: StatesT[F, EntityId, EntityState]](
     getEventId: Kleisli[F, Event, EntityId],
     getEntityState: Kleisli[F, Event, EntityState],
   ): StateUpdate[Kleisli[F, _, _], Event, EntityId, EntityState, States] =
     StateUpdate(getEventId, getEntityState, refMapUpdate)
 
-  def refMapUpdate[F[_], EntityId, EntityState: Monoid, States <: MapRef[F, EntityId, Option[EntityState]]]
+  def refMapUpdate[F[_], EntityId, EntityState: Monoid, States <: StatesT[F, EntityId, EntityState]]
     : Kleisli[F, (States, (EntityState, EntityId)), Unit] = Kleisli { case (states, (inputEvent, id)) =>
-    states(id).update(_ |+| inputEvent.some)
+    states(id).modify(_ |+| inputEvent.some)
   }

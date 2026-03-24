@@ -1,6 +1,6 @@
 package io.github.mercurievv.home_automation.rules
 
-import io.github.mercurievv.minuscles.opaques.Opaque
+import io.github.mercurievv.minuscles.opaques.{Opaque, OpaqueFunctor}
 
 import scala.compiletime.*
 import scala.deriving.*
@@ -11,17 +11,21 @@ import monocle.{Iso, Lens, Prism}
 
 object EventTypes {
 
-  object In extends OpaqueFunctor
-  type In[a] = In.F[a]
+  object In extends OpaqueApplicative
+  type In[a] = In.Opq[a]
 
-  object Out extends OpaqueFunctor
-  type Out[a] = Out.F[a]
+  object Out extends OpaqueApplicative
+  type Out[a] = Out.Opq[a]
 
-  object St extends OpaqueFunctor // entity from state holder
-  type St[a] = St.F[a]
+  object St extends OpaqueApplicative // entity from state holder
+  type St[a] = St.Opq[a]
 
   object EntityId extends Opaque[String]
   type EntityId = EntityId.Opq
+
+  case class EntitySourceId(
+    source: String,
+    entityId: EntityId)
 
   trait Toggleable[A]:
     extension (a: A) def toggle: A
@@ -75,13 +79,9 @@ object EventTypes {
 
   type OnOffState = OnOffState.Opq
 
-  trait OpaqueFunctor:
-    opaque type F[a] = a
-    def apply[A](a: A): F[A] = a
-    def unapply[A](a: F[A]): A = a
-    extension [A](o: F[A]) def value: A = o
+  trait OpaqueApplicative extends OpaqueFunctor:
 
-    given Applicative[F] = new Applicative[F]:
-      override def pure[A](x: A): F[A] = x
-      override def ap[A, B](ff: F[A => B])(fa: F[A]): F[B] = ff(fa)
+    given Applicative[Opq] = new Applicative[Opq]:
+      override def pure[A](x: A): Opq[A] = apply(x)
+      override def ap[A, B](ff: Opq[A => B])(fa: Opq[A]): Opq[B] = OpaqueApplicative.this.ap(ff)(fa)
 }

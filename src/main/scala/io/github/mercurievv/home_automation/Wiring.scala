@@ -1,5 +1,6 @@
 package io.github.mercurievv.home_automation
 
+import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.impl.TypesWiring
 import io.github.mercurievv.home_automation.state.StateUpdate
 
@@ -11,7 +12,7 @@ import cats.implicits.*
 import cats.kernel.Monoid
 import cats.{Applicative, Id, Monad, MonadThrow, ~>}
 
-import cats.effect.std.MapRef
+import io.circe.syntax.*
 
 import fs2.*
 
@@ -21,7 +22,7 @@ import org.typelevel.log4cats.{SelfAwareStructuredLogger, StructuredLogger}
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
   type TypeSystemWithStates[F[_]] = TypeSystem {
-    type States = MapRef[F, EventId, Option[EventState]]
+    type States = StatesT[F, EventId, EventState]
   }
 
   def wire[F[_]: {MonadThrow, SelfAwareStructuredLogger}, SQ[_]: Applicative](
@@ -32,6 +33,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
   )(using MES: Monoid[ts.EventState],
     MFS: Monad[[a] =>> F[SQ[a]]],
+    ESE: _root_.io.circe.Encoder[ts.EventState],
   ): Kleisli[
     Stream[F, _],
     ((ts.type, ts.States), Session[F]),
@@ -79,8 +81,14 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
           .flatMapF(v =>
             Stream.eval(
               StructuredLogger[F]
-                .addContext(Map("EntityId" -> v.value._1.toString))
-                .info(s"Decoded message ${v.toString.take(500)}")
+                .addContext(
+                  Map(
+                    "event"    -> "decoded_message",
+                    "entityId" -> v.value._1.toString,
+                    "payload"  -> v.value._2.asJson.noSpaces,
+                  ),
+                )
+                .info("Decoded message")
                 .as(v),
             ),
           )

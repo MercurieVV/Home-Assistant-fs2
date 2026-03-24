@@ -3,6 +3,7 @@ package io.github.mercurievv.home_automation
 import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out}
 
 import cats.Functor
+import cats.mtl.Stateful
 
 trait TypeSystem {
   type EventId
@@ -17,3 +18,6 @@ trait TypeSystem {
     def eventState: F[EventState]
   }
 }
+
+object TypeSystem:
+  type StatesT[F[_], K, V] = K => Stateful[F, Option[V]]
