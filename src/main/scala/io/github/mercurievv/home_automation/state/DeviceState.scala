@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.state
 
 import io.github.mercurievv.home_automation.TypeSystem.StatesT
-import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
+import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 
 import scala.concurrent.duration.DurationInt
 
@@ -38,18 +38,18 @@ case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]
     .as(this)
 }
 
-object DeviceState extends Data[EntityId, JsonObject] {
+object DeviceState extends Data[Topic, JsonObject] {
   override def name: String = "entity id"
 
-  def source[F[_]: {Temporal, LoggerFactory}](session: Session[F]): DataSource[F, EntityId, JsonObject] =
+  def source[F[_]: {Temporal, LoggerFactory}](session: Session[F]): DataSource[F, Topic, JsonObject] =
     val logger = LoggerFactory.getLogger[F]
-    new DataSource[F, EntityId, JsonObject] {
+    new DataSource[F, Topic, JsonObject] {
 
-      override def data: Data[EntityId, JsonObject] = DeviceState
+      override def data: Data[Topic, JsonObject] = DeviceState
 
       override given CF: Concurrent[F] = kernel.Concurrent[F]
 
-      override def fetch(id: EntityId): F[Option[JsonObject]] =
+      override def fetch(id: Topic): F[Option[JsonObject]] =
         import io.circe.parser.parse
         session
           .publish(id.value + "/get", "{\"state\": \"\"}".getBytes.toVector) *> session.messages
@@ -72,11 +72,11 @@ object DeviceStateAcessor:
 
   def createDevicesDataAcessor[F[_]: {SelfAwareStructuredLogger, Async, Applicative, LoggerFactory}]: Kleisli[
     Id,
-    (Session[F], Ref[F, Map[EntityId, JsonObject]]),
-    StatesT[F, EntityId, JsonObject],
+    (Session[F], Ref[F, Map[Topic, JsonObject]]),
+    StatesT[F, Topic, JsonObject],
   ] = Kleisli { case (session, ref) =>
     val deviceStates = DeviceState.source[F](session)
-    createStates[F, EntityId, JsonObject](deviceStates, ref)
+    createStates[F, Topic, JsonObject](deviceStates, ref)
   }
 
   given createStates

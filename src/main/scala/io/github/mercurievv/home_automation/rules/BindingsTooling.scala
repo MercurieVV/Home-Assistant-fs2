@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.home_automation.rules.Devices.{InputAction, OutputAction}
-import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out, St, Toggleable}
+import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out, St, Toggleable, Topic}
 
 import cats.Monad
 import cats.arrow.Arrow
@@ -21,7 +21,7 @@ class BindingsTooling[F[_]: Monad]:
     in: InputAction[In[JsonObject] --> Action],
     out: OutputAction[T],
     decision: (St[T], Action) --> Out[T],
-  ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Out[JsonObject])) =
+  ): (In[Topic], (Out[Topic], Topic --> JsonObject => In[JsonObject] --> Out[JsonObject])) =
     bindAction[-->, Action, T](
       in,
       out,
@@ -32,7 +32,7 @@ class BindingsTooling[F[_]: Monad]:
     in: InputAction[In[JsonObject] --> Action],
     out: OutputAction[OutT],
     decision: (OutT, Action) --> OutT,
-  ): (In[EntityId], (Out[EntityId], EntityId --> JsonObject => In[JsonObject] --> Out[JsonObject])) = {
+  ): (In[Topic], (Out[Topic], Topic --> JsonObject => In[JsonObject] --> Out[JsonObject])) = {
     given Decoder[OutT] = out.decoder
     (
       in.id,
@@ -46,8 +46,8 @@ class BindingsTooling[F[_]: Monad]:
 
   def createActionForJson[-->[_, _]: Arrow, Input, Action, Output: Decoder](
     filter: Input --> Action,
-    outputId: Out[EntityId],
-    getOutState: EntityId --> JsonObject,
+    outputId: Out[Topic],
+    getOutState: Topic --> JsonObject,
     decision: (Output, Action) --> Output,
   ): Input --> Output = createAction[-->, Input, Action, JsonObject, Output](
     filter,
@@ -59,8 +59,8 @@ class BindingsTooling[F[_]: Monad]:
 
   def createAction[-->[_, _]: Arrow, Input, Action, StateOut, Output](
     filter: Input --> Action,
-    outputId: Out[EntityId],
-    getOutState: EntityId --> StateOut,
+    outputId: Out[Topic],
+    getOutState: Topic --> StateOut,
     convert: StateOut => Output,
     decision: (Output, Action) --> Output,
   ): Input --> Output = {

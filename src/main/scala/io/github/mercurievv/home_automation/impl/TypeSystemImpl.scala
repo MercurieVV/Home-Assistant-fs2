@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.impl
 
 import io.github.mercurievv.home_automation.Wiring.TypeSystemWithStates
-import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
+import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 
 import cats.Functor
 import cats.implicits.toFunctorOps
@@ -10,7 +10,7 @@ import io.circe.JsonObject
 
 class TypeSystemImpl[F[_]] extends TypeSystemWithStates[F] {
 
-  override type EventId = EntityId
+  override type EventId = Topic
   override type EventState = JsonObject
 
   extension [F[_]: Functor](e: Event[F]) {

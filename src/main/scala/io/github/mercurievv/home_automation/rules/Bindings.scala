@@ -21,16 +21,14 @@ type Maybe[A] = List[A]
 object Devices:
 
   case class InputAction[Action](
-    id: In[EntityId],
+    id: In[Topic],
     action: Action)
   given Functor[InputAction] = semiauto.functor
 
   case class OutputAction[OutT](
-    id: Out[EntityId],
+    id: Out[Topic],
     encoder: Encoder[OutT],
     decoder: Decoder[OutT])
-
-  val zigbee2mqttTopic = "zigbee2mqtt/"
 
 object Zigbee2Mqtt:
 
@@ -43,7 +41,7 @@ object Zigbee2Mqtt:
     def ia[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)(using Monad[[a] =>> F[S[a]]])
       : InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]] =
       InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]](
-        id     = In(EntityId("zigbee2mqtt/" + deviceName)),
+        id     = In(Topic("zigbee2mqtt", EntityId(deviceName), None)),
         action = (
           (v: In[JsonObject]) => o2S(v.value.toJson.as[T].toOption).pure[F],
         ).k,
@@ -51,7 +49,7 @@ object Zigbee2Mqtt:
 
     def oa[T: {Decoder, Encoder}]: OutputAction[T] =
       OutputAction[T](
-        id      = Out(EntityId("zigbee2mqtt/" + deviceName + "/set")),
+        id      = Out(Topic("zigbee2mqtt", EntityId(deviceName), Some("set"))),
         decoder = summon,
         encoder = summon,
       )
@@ -101,11 +99,11 @@ object Bindings:
   )(using MFS: Monad[[a] =>> F[S[a]]],
     MSU: MonoidK[S],
   ): Map[
-    In[EntityId],
+    In[Topic],
     List[
       (
-        Out[EntityId],
-        Kleisli[[a] =>> F[S[a]], EntityId, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
+        Out[Topic],
+        Kleisli[[a] =>> F[S[a]], Topic, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
       ),
     ],
   ] = {

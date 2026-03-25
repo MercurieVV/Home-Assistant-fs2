@@ -6,6 +6,7 @@ import scala.compiletime.*
 import scala.deriving.*
 
 import cats.Applicative
+import cats.implicits.catsSyntaxEitherId
 
 import monocle.{Iso, Lens, Prism}
 
@@ -23,9 +24,19 @@ object EventTypes {
   object EntityId extends Opaque[String]
   type EntityId = EntityId.Opq
 
-  case class EntitySourceId(
-    source: String,
-    entityId: EntityId)
+  case class Topic(
+    service: String,
+    entityId: EntityId,
+    eventType: Option[String]):
+    val value: String = ???
+
+  object Topic:
+
+    def parse(s: String): Either[Throwable, Topic] =
+      s.split("/", 3) match
+        case Array(service, entityId)         => Topic(service, EntityId(entityId), None).asRight
+        case Array(service, entityId, suffix) => Topic(service, EntityId(entityId), Some(suffix)).asRight
+        case _                                => Left(new RuntimeException(s"Can't parse $s"))
 
   trait Toggleable[A]:
     extension (a: A) def toggle: A

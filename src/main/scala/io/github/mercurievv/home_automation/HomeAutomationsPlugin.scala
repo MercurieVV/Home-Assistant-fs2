@@ -11,7 +11,7 @@ import io.github.mercurievv.home_automation.mqtt.Mqtt
 import io.github.mercurievv.home_automation.rules.Bindings
 import io.github.mercurievv.home_automation.rules.BindingsProcessor
 import io.github.mercurievv.home_automation.rules.BindingsTooling
-import io.github.mercurievv.home_automation.rules.EventTypes.EntityId
+import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 import io.github.mercurievv.home_automation.state.*
 
 import java.util.concurrent.atomic.AtomicReference
@@ -87,7 +87,7 @@ class HomeAutomationsPlugin extends Plugin {
               bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                 (
                   t._1,
-                  ((k: EntityId) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
+                  ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
                 ),
               ),
             )

@@ -1,6 +1,6 @@
 package io.github.mercurievv.home_automation.rules
 
-import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Out}
+import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out, Topic}
 
 import cats.data.Kleisli
 import cats.implicits.*
@@ -11,18 +11,18 @@ import io.circe.JsonObject
 class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
   o2S: Option ~> S,
   actionsMap: Map[
-    In[EntityId],
+    In[Topic],
     S[
       (
-        Out[EntityId],
-        Kleisli[[a] =>> F[S[a]], EntityId, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
+        Out[Topic],
+        Kleisli[[a] =>> F[S[a]], Topic, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
       ),
     ],
   ]) {
   given Functor[S] = summon[Monad[S]]
   type -->[a, b] = Kleisli[[a] =>> F[S[a]], a, b]
-  type ActionInput = (In[(EntityId, JsonObject)], EntityId --> JsonObject)
-  type ActionOutput = Out[(EntityId, JsonObject)]
+  type ActionInput = (In[(Topic, JsonObject)], Topic --> JsonObject)
+  type ActionOutput = Out[(Topic, JsonObject)]
 
   val processBindings: ActionInput --> ActionOutput =
     Kleisli[[a] =>> F[S[a]], ActionInput, ActionOutput] { case (input, state) =>
