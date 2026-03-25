@@ -38,20 +38,20 @@ import ch.qos.logback.classic.joran.JoranConfigurator
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
 import net.sigusr.mqtt.api.Session
 import org.pf4j.Plugin
-import org.slf4j.LoggerFactory
-import org.typelevel.log4cats.slf4j.Slf4jLogger
-import org.typelevel.log4cats.{Logger, SelfAwareLogger, SelfAwareStructuredLogger}
+import org.typelevel.log4cats.*
+import org.typelevel.log4cats.slf4j.{Slf4jFactory, Slf4jLogger}
 
 class HomeAutomationsPlugin extends Plugin {
   reconfigureLogback()
   given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+  given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private var runtime: IORuntime = uninitialized
 
   private val fiberRef: AtomicReference[Option[FiberIO[Unit]]] =
     new AtomicReference[Option[FiberIO[Unit]]](None)
 
-  def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative}]: F[Unit] = {
+  def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative, LoggerFactory}]: F[Unit] = {
     val ts = new TypeSystemImpl[F]
     given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
     val pluginResources: Resource[F, ((Mqtt.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit))] =
@@ -110,7 +110,7 @@ class HomeAutomationsPlugin extends Plugin {
   }
 
   private def reconfigureLogback(): Unit =
-    val factory = LoggerFactory.getILoggerFactory
+    val factory = org.slf4j.LoggerFactory.getILoggerFactory
     System.err.println(s"[Plugin-logback] factory=${factory.getClass.getName} cl=${factory.getClass.getClassLoader}")
     factory match
       case context: LoggerContext =>

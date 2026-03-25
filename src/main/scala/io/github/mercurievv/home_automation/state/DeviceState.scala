@@ -19,7 +19,7 @@ import io.circe.JsonObject
 
 import fetch.{Data, DataCache, DataSource, Fetch}
 import net.sigusr.mqtt.api.Session
-import org.typelevel.log4cats.SelfAwareStructuredLogger
+import org.typelevel.log4cats.{LoggerFactory, SelfAwareStructuredLogger}
 
 case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]) extends DataCache[F] {
 
@@ -41,7 +41,8 @@ case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]
 object DeviceState extends Data[EntityId, JsonObject] {
   override def name: String = "entity id"
 
-  def source[F[_]: Temporal](session: Session[F]): DataSource[F, EntityId, JsonObject] =
+  def source[F[_]: {Temporal, LoggerFactory}](session: Session[F]): DataSource[F, EntityId, JsonObject] =
+    val logger = LoggerFactory.getLogger[F]
     new DataSource[F, EntityId, JsonObject] {
 
       override def data: Data[EntityId, JsonObject] = DeviceState
@@ -50,7 +51,8 @@ object DeviceState extends Data[EntityId, JsonObject] {
 
       override def fetch(id: EntityId): F[Option[JsonObject]] =
         import io.circe.parser.parse
-        session.publish(id.value + "/get", "{\"state\": \"\"}".getBytes.toVector) *> session.messages
+        session
+          .publish(id.value + "/get", "{\"state\": \"\"}".getBytes.toVector) *> session.messages
           .filter(_.topic == id.value)
           .head
           .interruptAfter(5.seconds)
@@ -68,7 +70,7 @@ object DeviceStateAcessor:
 
   import io.github.mercurievv.home_automation.instances.JsonInstances.given
 
-  def createDevicesDataAcessor[F[_]: {SelfAwareStructuredLogger, Async, Applicative}]: Kleisli[
+  def createDevicesDataAcessor[F[_]: {SelfAwareStructuredLogger, Async, Applicative, LoggerFactory}]: Kleisli[
     Id,
     (Session[F], Ref[F, Map[EntityId, JsonObject]]),
     StatesT[F, EntityId, JsonObject],
