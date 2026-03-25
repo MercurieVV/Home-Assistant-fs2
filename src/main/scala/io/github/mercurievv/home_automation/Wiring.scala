@@ -68,7 +68,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     decodeMessage: Message => ts.InputEvent,
     encodeMessage: ts.OutputEvent => Message,
     decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
-    addLogContext: ts.InputEvent => Map[String, String],
+    addLogContext: ts.EventId => Map[String, String],
   )(using MES: Monoid[ts.EventState],
     MFS: Monad[[a] =>> F[SQ[a]]],
     ESE: _root_.io.circe.Encoder[ts.EventState],
@@ -120,9 +120,9 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
             val messageJson = v.value._2.asJson.noSpaces
             Stream.eval(
               StructuredLogger[F]
-                .addContext(addLogContext(v))
+                .addContext(addLogContext(v.value._1) ++ Map("event" -> "consuming_message"))
                 .info(Map("payload" -> messageJson))(
-                  s"Start consuming message. source: \"${v.value._1}\" message: ${messageJson.take(500)}",
+                  s"Consuming message. source: \"${v.value._1}\" message: ${messageJson.take(500)}",
                 )
                 .as(v),
             )
@@ -131,7 +131,12 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
           Kleisli(producer =>
             Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
               val msg = encodeMessage(oe)
-              producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
+              val messageJson = oe.value._2.asJson.noSpaces
+              StructuredLogger[F]
+                .addContext(addLogContext(oe.value._1) ++ Map("event" -> "producing_message"))
+                .info(Map("payload" -> messageJson))(
+                  s"Producing message. source: \"${oe.value._1}\" message: ${messageJson.take(500)}",
+                ) *> producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
             ).pure[S],
           )
       },

@@ -90,13 +90,12 @@ class HomeAutomationsPlugin extends Plugin {
                   ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
                 ),
               ),
-              i =>
+              topic =>
                 Map(
-                  "event"     -> "consuming_message",
-                  "entityId"  -> i.value._1.entityId.value,
-                  "service"   -> i.value._1.service,
-                  "eventType" -> i.value._1.eventType.getOrElse(""),
-                  "topic"     -> i.value._1.value,
+                  "entityId"  -> topic.entityId.value,
+                  "service"   -> topic.service,
+                  "eventType" -> topic.eventType.getOrElse(""),
+                  "topic"     -> topic.value,
                 ),
             )
             .apply(((ts, states), session))
