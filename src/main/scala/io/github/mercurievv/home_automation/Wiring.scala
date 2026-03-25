@@ -68,6 +68,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     decodeMessage: Message => ts.InputEvent,
     encodeMessage: ts.OutputEvent => Message,
     decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
+    addLogContext: ts.InputEvent => Map[String, String],
   )(using MES: Monoid[ts.EventState],
     MFS: Monad[[a] =>> F[SQ[a]]],
     ESE: _root_.io.circe.Encoder[ts.EventState],
@@ -119,12 +120,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
             val messageJson = v.value._2.asJson.noSpaces
             Stream.eval(
               StructuredLogger[F]
-                .addContext(
-                  Map(
-                    "event"    -> "consuming_message",
-                    "entityId" -> v.value._1.toString,
-                  ),
-                )
+                .addContext(addLogContext(v))
                 .info(Map("payload" -> messageJson))(
                   s"Start consuming message. source: \"${v.value._1}\" message: ${messageJson.take(500)}",
                 )

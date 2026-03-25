@@ -28,7 +28,7 @@ object EventTypes {
     service: String,
     entityId: EntityId,
     eventType: Option[String]):
-    val value: String = ???
+    val value: String = service + "/" + entityId + eventType.map("/" + _).getOrElse("")
 
   object Topic:
 
