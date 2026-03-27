@@ -4,11 +4,13 @@ import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out, Topic}
 
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.{Applicative, Functor, Monad, Traverse, ~>}
+import cats.{Functor, Monad, Traverse, ~>}
 
 import io.circe.JsonObject
 
-class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
+import org.typelevel.log4cats.StructuredLogger
+
+class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}](
   o2S: Option ~> S,
   actionsMap: Map[
     In[Topic],
@@ -18,7 +20,8 @@ class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
         Kleisli[[a] =>> F[S[a]], Topic, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
       ),
     ],
-  ]) {
+  ],
+  addLogContext: Topic => Map[String, String]) {
   given Functor[S] = summon[Monad[S]]
   type -->[a, b] = Kleisli[[a] =>> F[S[a]], a, b]
   type ActionInput = (In[(Topic, JsonObject)], Topic --> JsonObject)
@@ -29,9 +32,24 @@ class BindingsProcessor[F[_]: Applicative, S[_]: {Monad, Traverse}](
       o2S(actionsMap.get(input.map(_._1))).flatten
         .map { case (outId, action) =>
           val inJson = input.map(_._2)
+          val messageJson = inJson.value.toJson.noSpaces
           action(state)
             .apply(inJson)
             .map(_.map((outId, _).tupled))
+            .flatTap(output =>
+              StructuredLogger[F]
+                .addContext(addLogContext(input.value._1) ++ Map("event" -> "decision_making"))
+                .info(
+                  Map(
+                    "inputTopic"    -> input.value._1.value,
+                    "inputMessage"  -> messageJson,
+                    "outputTopic"   -> outId.value.value,
+                    "outputMessage" -> output.toString,
+                  ),
+                )(
+                  s"Decision done. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outId, output message: $output",
+                ),
+            )
         }
         .sequence
         .map(_.flatten)

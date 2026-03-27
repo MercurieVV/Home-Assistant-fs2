@@ -98,7 +98,8 @@ class HomeAutomationsPlugin extends Plugin {
             val bindingsTooling = new BindingsTooling[FL]()
             val bindings = Bindings.create[F, List](bindingsTooling, o2l)
 
-            val bindingsProcessor: BindingsProcessor[F, List] = new BindingsProcessor[F, List](o2l, bindings)
+            val bindingsProcessor: BindingsProcessor[F, List] =
+              new BindingsProcessor[F, List](o2l, bindings, addLogContext)
 
             Stream
               .resource(pluginResources)
