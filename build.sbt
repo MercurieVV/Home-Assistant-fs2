@@ -29,12 +29,13 @@ lazy val root = (project in file("."))
       "io.github.mercurievv.minuscles" %% "tuples_transformers"           % "0.1.0",
       "io.github.mercurievv.minuscles" %% "opaques"                       % "0.2.0",
       // OpenTelemetry tracing (otel4s + OTel Java SDK)
-      "org.typelevel"                  %% "otel4s-oteljava"               % "0.11.1",
-      "io.opentelemetry"                % "opentelemetry-sdk-extension-autoconfigure" % "1.41.0" % Runtime,
+      "org.typelevel"                  %% "otel4s-oteljava"               % "0.15.2",
+      "org.typelevel"                  %% "otel4s-oteljava-context-storage" % "0.15.2",
+      "io.opentelemetry"                % "opentelemetry-sdk-extension-autoconfigure" % "1.60.0" % Runtime,
       // Logback MDC bridge: injects trace_id / span_id into MDC on every log event
-      "io.opentelemetry.instrumentation" % "opentelemetry-logback-mdc-1.0" % "2.9.0-alpha" % Runtime,
+      "io.opentelemetry.instrumentation" % "opentelemetry-logback-mdc-1.0" % "2.14.0-alpha" % Runtime,
       // OTLP exporter: sends traces to Grafana Tempo (or any OTLP-compatible backend)
-      "io.opentelemetry" % "opentelemetry-exporter-otlp" % "1.41.0" % Runtime,
+      "io.opentelemetry" % "opentelemetry-exporter-otlp" % "1.60.0" % Runtime,
       // Functional config loading (HOCON)
       "com.github.pureconfig" %% "pureconfig-core" % "0.17.7",
     ),

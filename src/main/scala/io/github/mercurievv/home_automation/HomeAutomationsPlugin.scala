@@ -64,9 +64,18 @@ class HomeAutomationsPlugin extends Plugin {
         .use { otel =>
           otel.tracerProvider.tracer("ha-automations").get.flatMap { tracer =>
             given Tracer[F] = tracer
+            given SelfAwareStructuredLogger[F] = withTracing(summon[SelfAwareStructuredLogger[F]])
 
             val ts = new TypeSystemImpl[F]
             given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
+
+            val addLogContext: ts.EventId => Map[String, String] = topic =>
+              Map(
+                "entityId"  -> topic.entityId.value,
+                "service"   -> topic.service,
+                "eventType" -> topic.eventType.getOrElse(""),
+                "topic"     -> topic.value,
+              )
             val pluginResources: Resource[
               F,
               ((AppConfig.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit)),
@@ -106,13 +115,7 @@ class HomeAutomationsPlugin extends Plugin {
                           ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
                         ),
                       ),
-                      topic =>
-                        Map(
-                          "entityId"  -> topic.entityId.value,
-                          "service"   -> topic.service,
-                          "eventType" -> topic.eventType.getOrElse(""),
-                          "topic"     -> topic.value,
-                        ),
+                      addLogContext,
                     )
                     .apply(((ts, states), session))
                     .evalMap { case (inputEvent, process) =>
@@ -137,19 +140,33 @@ class HomeAutomationsPlugin extends Plugin {
         }
     }
 
-  /** Flattens every HOCON entry from the config file into the logback context so that
-    * logback.xml can reference them as ${loki.user}, ${influxdb.url}, etc.
-    * Must be called after context.reset() and before doConfigure().
+  /** Loads config values needed by logback.xml as temporary system properties for the duration of doConfigure(), then
+    * clears them. System properties are resolved by logback's ${...} substitution but are never merged into MDC, so
+    * credentials don't leak into log tags.
     */
-  private def injectHoconIntoLogback(context: LoggerContext): Unit =
-    import scala.jdk.CollectionConverters.*
+  private def withHoconAsSystemProps[A](action: => A): A =
     import com.typesafe.config.ConfigFactory
-    try
-      ConfigFactory.parseFile(AppConfig.configPath.toFile)
-        .entrySet().asScala
-        .foreach(e => context.putProperty(e.getKey, e.getValue.unwrapped.toString))
-    catch case e: Exception =>
-      System.err.println(s"[Plugin-logback] Failed to inject HOCON into logback context: $e")
+    val keys = Seq(
+      "loki.url",
+      "loki.user",
+      "loki.password",
+      "influxdb.url",
+      "influxdb.user",
+      "influxdb.password",
+      "influxdb.database",
+      "influxdb.measurement",
+    )
+    val loaded =
+      try
+        val config = ConfigFactory.parseFile(AppConfig.configPath.toFile)
+        keys.flatMap(k => if config.hasPath(k) then Some(k -> config.getString(k)) else None).toMap
+      catch
+        case e: Exception =>
+          System.err.println(s"[Plugin-logback] Failed to load HOCON for logback substitution: $e")
+          Map.empty
+    loaded.foreach { case (k, v) => System.setProperty(k, v) }
+    try action
+    finally loaded.keys.foreach(System.clearProperty)
 
   private def reconfigureLogback(): Unit =
     val factory = org.slf4j.LoggerFactory.getILoggerFactory
@@ -162,19 +179,87 @@ class HomeAutomationsPlugin extends Plugin {
           val configurator = new JoranConfigurator()
           configurator.setContext(context)
           context.reset()
-          injectHoconIntoLogback(context)
-          try
-            configurator.doConfigure(url)
-            System.err.println(
-              s"[Plugin-logback] configured OK, appenders=${context.getLogger("root").iteratorForAppenders().hasNext}",
-            )
+          try withHoconAsSystemProps(configurator.doConfigure(url))
           catch case e: Exception => System.err.println(s"[Plugin-logback] doConfigure failed: $e")
+          System.err.println(
+            s"[Plugin-logback] configured OK, appenders=${context.getLogger("root").iteratorForAppenders().hasNext}",
+          )
         else System.err.println(s"[Plugin-logback] logback.xml NOT found in plugin classpath!")
       case other =>
         System.err.println(s"[Plugin-logback] factory is NOT LoggerContext: ${other.getClass.getName}")
         System.err.println(s"[Plugin-logback] plugin LoggerContext cl: ${classOf[LoggerContext].getClassLoader}")
 
+  private def withTracing[F[_]: {Monad, Tracer}](
+    underlying: SelfAwareStructuredLogger[F],
+  ): SelfAwareStructuredLogger[F] = {
+    def tc: F[Map[String, String]] =
+      Tracer[F].currentSpanContext.map(
+        _.map(c => Map("trace_id" -> c.traceId.toHex, "span_id" -> c.spanId.toHex)).getOrElse(Map.empty),
+      )
+    def run(f: SelfAwareStructuredLogger[F] => F[Unit]): F[Unit] =
+      tc.flatMap(ctx => f(underlying.addContext(ctx)))
+
+    new SelfAwareStructuredLogger[F] {
+      def isTraceEnabled: F[Boolean] = underlying.isTraceEnabled
+      def isDebugEnabled: F[Boolean] = underlying.isDebugEnabled
+      def isInfoEnabled: F[Boolean] = underlying.isInfoEnabled
+      def isWarnEnabled: F[Boolean] = underlying.isWarnEnabled
+      def isErrorEnabled: F[Boolean] = underlying.isErrorEnabled
+
+      def trace(msg: => String): F[Unit] = run(_.trace(msg))
+      def trace(ctx: Map[String, String])(msg: => String): F[Unit] = run(_.trace(ctx)(msg))
+      def trace(t: Throwable)(msg: => String): F[Unit] = run(_.trace(t)(msg))
+      def trace(
+        ctx: Map[String, String],
+        t: Throwable,
+      )(
+        msg: => String,
+      ): F[Unit] = run(_.trace(ctx, t)(msg))
+
+      def debug(msg: => String): F[Unit] = run(_.debug(msg))
+      def debug(ctx: Map[String, String])(msg: => String): F[Unit] = run(_.debug(ctx)(msg))
+      def debug(t: Throwable)(msg: => String): F[Unit] = run(_.debug(t)(msg))
+      def debug(
+        ctx: Map[String, String],
+        t: Throwable,
+      )(
+        msg: => String,
+      ): F[Unit] = run(_.debug(ctx, t)(msg))
+
+      def info(msg: => String): F[Unit] = run(_.info(msg))
+      def info(ctx: Map[String, String])(msg: => String): F[Unit] = run(_.info(ctx)(msg))
+      def info(t: Throwable)(msg: => String): F[Unit] = run(_.info(t)(msg))
+      def info(
+        ctx: Map[String, String],
+        t: Throwable,
+      )(
+        msg: => String,
+      ): F[Unit] = run(_.info(ctx, t)(msg))
+
+      def warn(msg: => String): F[Unit] = run(_.warn(msg))
+      def warn(ctx: Map[String, String])(msg: => String): F[Unit] = run(_.warn(ctx)(msg))
+      def warn(t: Throwable)(msg: => String): F[Unit] = run(_.warn(t)(msg))
+      def warn(
+        ctx: Map[String, String],
+        t: Throwable,
+      )(
+        msg: => String,
+      ): F[Unit] = run(_.warn(ctx, t)(msg))
+
+      def error(msg: => String): F[Unit] = run(_.error(msg))
+      def error(ctx: Map[String, String])(msg: => String): F[Unit] = run(_.error(ctx)(msg))
+      def error(t: Throwable)(msg: => String): F[Unit] = run(_.error(t)(msg))
+      def error(
+        ctx: Map[String, String],
+        t: Throwable,
+      )(
+        msg: => String,
+      ): F[Unit] = run(_.error(ctx, t)(msg))
+    }
+  }
+
   override def start(): Unit = {
+    System.setProperty("cats.effect.trackFiberContext", "true")
     runtime = IORuntime.builder().build()
     given IORuntime = runtime
 

@@ -106,7 +106,26 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
         t            = epti,
         updateState  = (inputEventWithStates >>> stateUpdate.apply).as(mapRef).mapK(f2fs),
         makeDecision = decisionMaking,
-      )
+      ) {
+        override def run: InputEvent --> OutputEvent =
+          Kleisli[FS, InputEvent, InputEvent] { (inputEvent: InputEvent) =>
+            val messageJson = inputEvent.value._2.asJson.noSpaces
+            StructuredLogger[F]
+              .addContext(addLogContext(inputEvent.value._1) ++ Map("event" -> "consuming_message"))
+              .info(Map("payload" -> messageJson))(
+                s"Consuming message. source: \"${inputEvent.value._1}\" message: ${messageJson.take(500)}",
+              )
+              .as(inputEvent.pure[SQ])
+          } >>> super.run >>> { (oe: OutputEvent) =>
+            val messageJson = oe.value._2.asJson.noSpaces
+            StructuredLogger[F]
+              .addContext(addLogContext(oe.value._1) ++ Map("event" -> "producing_message"))
+              .info(Map("payload" -> messageJson))(
+                s"Producing message. source: \"${oe.value._1}\" message: ${messageJson.take(500)}",
+              )
+              .as(oe.pure[SQ])
+          }.k
+      }
     }
 
     type ESP = EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP]
@@ -116,27 +135,12 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
         override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) => c.messages)
           .map(decodeMessage)
-          .flatMapF { v =>
-            val messageJson = v.value._2.asJson.noSpaces
-            Stream.eval(
-              StructuredLogger[F]
-                .addContext(addLogContext(v.value._1) ++ Map("event" -> "consuming_message"))
-                .info(Map("payload" -> messageJson))(
-                  s"Consuming message. source: \"${v.value._1}\" message: ${messageJson.take(500)}",
-                )
-                .as(v),
-            )
-          }
+
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
           Kleisli(producer =>
             Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
               val msg = encodeMessage(oe)
-              val messageJson = oe.value._2.asJson.noSpaces
-              StructuredLogger[F]
-                .addContext(addLogContext(oe.value._1) ++ Map("event" -> "producing_message"))
-                .info(Map("payload" -> messageJson))(
-                  s"Producing message. source: \"${oe.value._1}\" message: ${messageJson.take(500)}",
-                ) *> producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
+              producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
             ).pure[S],
           )
       },
