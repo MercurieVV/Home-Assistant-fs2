@@ -1,6 +1,6 @@
 package io.github.mercurievv.home_automation
 
-import io.github.mercurievv.home_automation.mqtt.Mqtt
+import io.github.mercurievv.home_automation.AppConfig.MqttSettings
 
 import cats.implicits.*
 
@@ -18,7 +18,7 @@ object DataProcessingLogic {
   private val stopTopic: String = s"addons/stop"
 
   def consume[F[_]: {Async, Logger}](
-    settings: Mqtt.MqttSettings,
+    settings: MqttSettings,
     session: Session[F],
   ): F[ExitCode] = {
     val subscribedTopics: Vector[(String, QualityOfService)] = Vector(

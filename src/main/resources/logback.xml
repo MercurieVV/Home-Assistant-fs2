@@ -1,11 +1,61 @@
 <configuration>
+  <conversionRule conversionWord="flatMdc" converterClass="io.github.mercurievv.home_automation.logging.FlatMdcConverter"/>
+
+  <!-- Base appenders -->
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%boldBlue(%d{YYYY-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %magenta(%marker) %cyan(%logger{10}) - %msg%n</pattern>
+      <pattern>%boldBlue(%d{YYYY-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %magenta(%marker) [%X{trace_id}] %cyan(%logger{10}) - %msg%n</pattern>
     </encoder>
   </appender>
 
-  <root level="INFO">
+  <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+    <http>
+      <url>${loki.url}</url>
+      <auth>
+        <username>${loki.user}</username>
+        <password>${loki.password}</password>
+      </auth>
+    </http>
+    <format>
+      <label>
+        <pattern>app=ha-automations,host=${HOSTNAME},level=%level,logger=%logger{10}%flatMdc</pattern>
+        <readMarkers>true</readMarkers>
+      </label>
+      <message class="net.logstash.logback.layout.LogstashLayout"/>
+    </format>
+  </appender>
+
+  <appender name="INFLUXDB" class="io.github.mercurievv.home_automation.logging.InfluxDbAppender">
+    <encoder>
+      <pattern>%boldBlue(%d{YYYY-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %magenta(%marker) %cyan(%logger{10}) - %msg%n</pattern>
+    </encoder>
+    <url>${influxdb.url}</url>
+    <user>${influxdb.user}</user>
+    <password>${influxdb.password}</password>
+    <database>${influxdb.database}</database>
+    <measurement>${influxdb.measurement}</measurement>
+  </appender>
+
+  <!--
+    OpenTelemetry MDC bridge: wraps each appender and injects trace_id, span_id, trace_flags
+    into the MDC before forwarding to the real appender.
+    Keys added: trace_id, span_id, trace_flags
+  -->
+  <appender name="OTEL_STDOUT" class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
     <appender-ref ref="STDOUT"/>
+  </appender>
+
+  <appender name="OTEL_LOKI" class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
+    <appender-ref ref="LOKI"/>
+  </appender>
+
+  <appender name="OTEL_INFLUXDB" class="io.opentelemetry.instrumentation.logback.mdc.v1_0.OpenTelemetryAppender">
+    <appender-ref ref="INFLUXDB"/>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="OTEL_STDOUT"/>
+    <appender-ref ref="OTEL_LOKI"/>
+    <appender-ref ref="OTEL_INFLUXDB"/>
   </root>
 </configuration>

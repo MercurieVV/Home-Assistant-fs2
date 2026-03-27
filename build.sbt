@@ -18,16 +18,25 @@ lazy val root = (project in file("."))
     semanticdbEnabled    := true,
     semanticdbVersion    := scalafixSemanticdb.revision,
     libraryDependencies ++= Seq(
-      "org.pf4j"                        % "pf4j"                  % "3.12.0" % Provided,
-      "org.typelevel"                  %% "cats-effect"           % "3.6.3",
-      "org.typelevel"                  %% "log4cats-slf4j"        % "2.7.1",
-      "ch.qos.logback"                  % "logback-classic"       % "1.5.18",
-      "org.influxdb"                    % "influxdb-java"         % "2.25",
-      "com.github.loki4j"               % "loki-logback-appender" % "1.5.2",
-      "net.logstash.logback"            % "logstash-logback-encoder" % "8.0",
-      "net.sigusr"                     %% "examples"              % "1.0.1",
-      "io.github.mercurievv.minuscles" %% "tuples_transformers"   % "0.1.0",
-      "io.github.mercurievv.minuscles" %% "opaques"               % "0.2.0",
+      "org.pf4j"                        % "pf4j"                         % "3.12.0"       % Provided,
+      "org.typelevel"                  %% "cats-effect"                   % "3.6.3",
+      "org.typelevel"                  %% "log4cats-slf4j"                % "2.7.1",
+      "ch.qos.logback"                  % "logback-classic"               % "1.5.18",
+      "org.influxdb"                    % "influxdb-java"                 % "2.25",
+      "com.github.loki4j"               % "loki-logback-appender"        % "1.5.2",
+      "net.logstash.logback"            % "logstash-logback-encoder"      % "8.0",
+      "net.sigusr"                     %% "examples"                      % "1.0.1",
+      "io.github.mercurievv.minuscles" %% "tuples_transformers"           % "0.1.0",
+      "io.github.mercurievv.minuscles" %% "opaques"                       % "0.2.0",
+      // OpenTelemetry tracing (otel4s + OTel Java SDK)
+      "org.typelevel"                  %% "otel4s-oteljava"               % "0.11.1",
+      "io.opentelemetry"                % "opentelemetry-sdk-extension-autoconfigure" % "1.41.0" % Runtime,
+      // Logback MDC bridge: injects trace_id / span_id into MDC on every log event
+      "io.opentelemetry.instrumentation" % "opentelemetry-logback-mdc-1.0" % "2.9.0-alpha" % Runtime,
+      // OTLP exporter: sends traces to Grafana Tempo (or any OTLP-compatible backend)
+      "io.opentelemetry" % "opentelemetry-exporter-otlp" % "1.41.0" % Runtime,
+      // Functional config loading (HOCON)
+      "com.github.pureconfig" %% "pureconfig-core" % "0.17.7",
     ),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core",
