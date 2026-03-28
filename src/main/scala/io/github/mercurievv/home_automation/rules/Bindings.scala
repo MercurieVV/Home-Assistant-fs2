@@ -5,6 +5,7 @@ import io.github.mercurievv.home_automation.rules.Devices.InputAction
 import io.github.mercurievv.home_automation.rules.EventTypes.*
 import io.github.mercurievv.home_automation.rules.EventTypes.given
 
+import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.derived.semiauto
 import cats.implicits.*
@@ -60,14 +61,14 @@ given Configuration = Configuration.default.withDefaults
 
 given Codec[OnOffState] = OnOffState.prism.toCodec
 
-case class LightState(
+case class PowerState(
   state: OnOffState = OnOffState.Off,
   brightness: Int = 255)
-given Codec[LightState] = ConfiguredCodec.derived
+given Codec[PowerState] = ConfiguredCodec.derived
 
-given Toggleable[LightState] = new Toggleable[LightState]:
-  extension (ls: LightState)
-    def toggle: LightState = LightState(
+given Toggleable[PowerState] = new Toggleable[PowerState]:
+  extension (ls: PowerState)
+    def toggle: PowerState = PowerState(
       state      = ls.state.toggle,
       brightness = 255,
     )
@@ -87,6 +88,11 @@ given Toggleable[BlindsState] = new Toggleable[BlindsState]:
     def toggle: BlindsState = a match {
       case BlindsState(position) => if position < 50 then doOpen else doClose
     }
+
+case class TemperatureHumiditySensor(
+  temperature: Float = -1000,
+  humidity: Float = -1)
+given Codec[TemperatureHumiditySensor] = ConfiguredCodec.derived
 
 case class SwitchAction(action: String)
 given Codec[SwitchAction] = ConfiguredCodec.derived
@@ -117,30 +123,37 @@ object Bindings:
       )
 
     List(
-      bindStatefulAction[-->, Unit, LightState](
+      bindStatefulAction[-->, Unit, PowerState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
-        Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
+        Zigbee2Mqtt.d("bedroom_lights").oa[PowerState],
         toggle,
       ),
-      bindStatefulAction[-->, Unit, LightState](
+      bindStatefulAction[-->, Unit, PowerState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "double_left"),
-        Zigbee2Mqtt.d("bedroom_lights").oa[LightState],
-        Out(LightState(state = OnOffState.On, brightness = 1)).pure,
+        Zigbee2Mqtt.d("bedroom_lights").oa[PowerState],
+        Out(PowerState(state = OnOffState.On, brightness = 1)).pure,
       ),
       bindStatefulAction[-->, Unit, BlindsState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Bedroom blinds").oa[BlindsState],
         toggle,
       ),
-      bindStatefulAction[-->, Unit, LightState](
+      bindStatefulAction[-->, Unit, PowerState](
         Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
-        Zigbee2Mqtt.d("kids_room_lights").oa[LightState],
+        Zigbee2Mqtt.d("kids_room_lights").oa[PowerState],
         toggle,
       ),
       bindStatefulAction[-->, Unit, BlindsState](
         Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Kids room blinds").oa[BlindsState],
         toggle,
+      ),
+      bindStatefulAction[-->, Float, PowerState](
+        Zigbee2Mqtt.d("Bathroom TH sensor").ia[F, S, TemperatureHumiditySensor](o2s).map(_.map(_.humidity)),
+        Zigbee2Mqtt.d("Bathroom fan plug").oa,
+        Arrow[-->].lift { case (_, h) =>
+          if h > 70 then Out(PowerState(state = OnOffState.On)) else Out(PowerState(state = OnOffState.Off))
+        },
       ),
     ).groupMap(_._1)(_._2)
   }
