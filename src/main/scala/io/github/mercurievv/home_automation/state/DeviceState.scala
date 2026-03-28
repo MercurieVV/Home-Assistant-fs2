@@ -9,7 +9,7 @@ import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.Semigroup
 import cats.mtl.Stateful
-import cats.{Applicative, Id, Monad}
+import cats.{Id, Monad}
 
 import cats.effect.kernel.{Async, Ref, Temporal}
 import cats.effect.std.MapRef
@@ -17,9 +17,9 @@ import cats.effect.{Concurrent, kernel}
 
 import io.circe.JsonObject
 
-import fetch.{Data, DataCache, DataSource, Fetch}
+import fetch.{Data, DataCache, DataSource}
 import net.sigusr.mqtt.api.Session
-import org.typelevel.log4cats.{LoggerFactory, SelfAwareStructuredLogger}
+import org.typelevel.log4cats.LoggerFactory
 
 case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]) extends DataCache[F] {
 
@@ -68,17 +68,6 @@ object DeviceState extends Data[Topic, JsonObject] {
 
 object DeviceStateAcessor:
 
-  import io.github.mercurievv.home_automation.instances.JsonInstances.given
-
-  def createDevicesDataAcessor[F[_]: {SelfAwareStructuredLogger, Async, Applicative, LoggerFactory}]: Kleisli[
-    Id,
-    (Session[F], Ref[F, Map[Topic, JsonObject]]),
-    StatesT[F, Topic, JsonObject],
-  ] = Kleisli { case (session, ref) =>
-    val deviceStates = DeviceState.source[F](session)
-    createStates[F, Topic, JsonObject](deviceStates, ref)
-  }
-
   given createStates
     : [F[_]: Async, K, V: Semigroup] => Kleisli[Id, (DataSource[F, K, V], Ref[F, Map[K, V]]), StatesT[F, K, V]] =
     Kleisli {
@@ -87,13 +76,12 @@ object DeviceStateAcessor:
         ref: Ref[F, Map[K, V]],
       ) =>
 
-        val mapRef = MapRef.fromSingleImmutableMapRef(ref)
-        val cache = MapRefCache[F, K, V](mapRef)
+        val mapRef: MapRef[F, K, Option[V]] = MapRef.fromSingleImmutableMapRef(ref)
         (k: K) =>
           new Stateful[F, Option[V]] {
             override def monad: Monad[F] = summon
 
-            override def get: F[Option[V]] = Fetch.run(Fetch.optional[F, K, V](k, deviceStateSource), cache)
+            override def get: F[Option[V]] = mapRef(k).get
 
             override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
           }

@@ -53,6 +53,8 @@
     <appender-ref ref="INFLUXDB"/>
   </appender>
 
+  <logger name="io.github.mercurievv.home_automation" level="DEBUG"/>
+
   <root level="INFO">
     <appender-ref ref="OTEL_STDOUT"/>
     <appender-ref ref="OTEL_LOKI"/>
