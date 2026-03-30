@@ -10,6 +10,7 @@ import ch.qos.logback.core.AppenderBase
 import org.influxdb.dto.Point
 import org.influxdb.{InfluxDB, InfluxDBFactory}
 
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 class InfluxDbAppender extends AppenderBase[ILoggingEvent]:
   private var influxDB: InfluxDB = uninitialized
 

@@ -35,7 +35,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = StatesT[F, EventId, EventState]
   }
 
-  def wireRessources[F[_]: {SelfAwareStructuredLogger, Async}, K: Meta, V: {Semigroup, Encoder, Meta}](
+  def wireRessources[F[_]: Async, K: Meta, V: {Semigroup, Encoder, Meta}](
     using i2f: Id ~> F,
   ): Kleisli[Resource[F, *], (Map[K, V], (String, DataSource[F, K, V])), StatesT[F, K, V]] =
     type RF[a] = Resource[F, a]

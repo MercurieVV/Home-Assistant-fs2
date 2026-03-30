@@ -1,13 +1,15 @@
 package io.github.mercurievv.home_automation.state
 
-import cats.{Id, ~>}
-import cats.implicits.toArrowOps
 import cats.arrow.Arrow.ops.toAllArrowOps
 import cats.arrow.FunctionK
+import cats.{Id, ~>}
+
 import cats.effect.IO
 import cats.effect.kernel.Resource
+
 import io.circe.Json
 import io.circe.testing.instances.arbitraryJson
+
 import org.scalacheck.Gen
 
 class SqliteKVStoreLawsTest extends KVStoreLaws[String, Json]:

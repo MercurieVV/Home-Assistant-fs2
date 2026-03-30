@@ -65,6 +65,7 @@ object EventTypes {
       new Toggleable[A]:
         extension (a: A) def toggle: A = allCases((ordinal(a) + 1) % allCases.size)
 
+    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
     inline def derived[A](using m: Mirror.SumOf[A]): Toggleable[A] =
       fromCases(summonCases[m.MirroredElemTypes].asInstanceOf[List[A]], m.ordinal)
 

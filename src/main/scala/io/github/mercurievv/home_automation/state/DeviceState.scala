@@ -21,32 +21,13 @@ import cats.effect.{Concurrent, Resource, kernel}
 import io.circe.JsonObject
 
 import doobie.Meta
-import fetch.{Data, DataCache, DataSource}
+import fetch.{Data, DataSource}
 import net.sigusr.mqtt.api.Session
-import org.typelevel.log4cats.LoggerFactory
-
-case class MapRefCache[F[_]: Monad, K, V: Semigroup](mr: MapRef[F, K, Option[V]]) extends DataCache[F] {
-
-  override def lookup[I, A](
-    i: I,
-    data: Data[I, A],
-  ): F[Option[A]] = mr.apply(i.asInstanceOf[K]).get.map(_.map(_.asInstanceOf[A]))
-
-  override def insert[I, A](
-    i: I,
-    v: A,
-    data: Data[I, A],
-  ): F[DataCache[F]] = mr
-    .apply(i.asInstanceOf[K])
-    .update(_ |+| v.asInstanceOf[V].some)
-    .as(this)
-}
 
 object DeviceState extends Data[Topic, JsonObject] {
   override def name: String = "entity id"
 
-  def source[F[_]: {Temporal, LoggerFactory}](session: Session[F]): DataSource[F, Topic, JsonObject] =
-    val logger = LoggerFactory.getLogger[F]
+  def source[F[_]: Temporal](session: Session[F]): DataSource[F, Topic, JsonObject] =
     new DataSource[F, Topic, JsonObject] {
 
       override def data: Data[Topic, JsonObject] = DeviceState
@@ -91,19 +72,6 @@ object DeviceStateAcessor:
         Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+>
           kvstore.get.toContext <+>
           Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
-
-      val updater: Kleisli[F, (K, V), Unit] =
-        Kleisli { case (k: K, v: V) =>
-          mapRef
-            .apply(k)
-            .modify {
-              case Some(value) =>
-                val nv = value |+| v
-                (nv.some, nv)
-              case None => (v.some, v)
-            }
-            .tupleLeft(k)
-        } >>> kvstore.put
 
       (k: K) =>
         new Stateful[F, Option[V]] {

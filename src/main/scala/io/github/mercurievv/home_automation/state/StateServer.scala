@@ -4,7 +4,6 @@ import io.github.mercurievv.cats.arrow.kleisli.*
 
 import java.net.InetSocketAddress
 
-import cats.Applicative
 import cats.data.Kleisli
 import cats.implicits.*
 
@@ -15,7 +14,6 @@ import io.circe.syntax.*
 import io.circe.{Encoder, Json}
 
 import com.sun.net.httpserver.HttpServer
-import org.typelevel.log4cats.SelfAwareStructuredLogger
 
 object StateServer {
 
@@ -46,8 +44,7 @@ object StateServer {
         .void
     }
 
-  def createStateServer[F[_]: {SelfAwareStructuredLogger, Async, Applicative}, K, V: Encoder]
-    : Kleisli[Resource[F, *], F[Map[K, V]], Unit] = (
+  def createStateServer[F[_]: Async, K, V: Encoder]: Kleisli[Resource[F, *], F[Map[K, V]], Unit] = (
     (getState: F[Map[K, V]]) => {
       val snapshot: F[String] = getState.map { map =>
         Json

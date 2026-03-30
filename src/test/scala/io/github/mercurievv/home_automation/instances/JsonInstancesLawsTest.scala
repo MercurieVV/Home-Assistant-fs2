@@ -2,8 +2,10 @@ package io.github.mercurievv.home_automation.instances
 
 import cats.Eq
 import cats.kernel.laws.discipline.{MonoidTests, SemigroupTests}
-import io.circe.{Json, JsonObject}
+
 import io.circe.testing.instances.arbitraryJson
+import io.circe.{Json, JsonObject}
+
 import munit.DisciplineSuite
 import org.scalacheck.Arbitrary
 

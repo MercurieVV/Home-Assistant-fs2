@@ -3,7 +3,7 @@ package io.github.mercurievv.cats
 import cats.arrow.{Arrow, FunctionK}
 import cats.data.OptionT
 import cats.implicits.*
-import cats.{Applicative, Functor, Id, Monad, MonoidK, Traverse, ~>}
+import cats.{Applicative, Id, Monad, MonoidK, Traverse, ~>}
 
 import cats.effect.kernel.Resource
 
@@ -15,12 +15,10 @@ package object arrow {
 }
 
 def composeMonads[F[_]: Monad, G[_]: {Monad, Traverse}]: Monad[[a] =>> F[G[a]]] = new Monad[[a] =>> F[G[a]]] {
-  type FG[a] = F[G[a]]
   override def pure[A](x: A): F[G[A]] = x.pure[G].pure[F]
 
-  given Functor[G] = Monad[G]
   override def flatMap[A, B](fa: F[G[A]])(f: A => F[G[B]]): F[G[B]] = fa.flatMap(la =>
-    val flb = la.map(f).sequence.map(_.flatten)
+    val flb = la.traverse(f).map(_.flatten)
     flb,
   )
 

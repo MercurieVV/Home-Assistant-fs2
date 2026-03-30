@@ -1,6 +1,7 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-lazy val deploy = taskKey[Unit]("Deploy fat jar to Home Assistant addon")
+lazy val deploy   = taskKey[Unit]("Deploy fat jar to Home Assistant addon")
+lazy val prePush  = taskKey[Unit]("Run all checks: format, fix, clean compile, test")
 
 ThisBuild / scalaVersion := "3.8.1"
 
@@ -13,10 +14,24 @@ lazy val root = (project in file("."))
       "-Xkind-projector:underscores",
       "-source:future",
       "-language:experimental.modularity",
-      "-Wunused:imports",
+      "-Wunused:all",
+      "-Wvalue-discard",
+      "-Werror",
     ),
     semanticdbEnabled    := true,
     semanticdbVersion    := scalafixSemanticdb.revision,
+    ThisBuild / scalafixDependencies += "org.typelevel" %% "typelevel-scalafix" % "0.3.1",
+    wartremoverWarnings ++= Seq(
+      Wart.Var,
+      Wart.MutableDataStructures,
+      Wart.NonUnitStatements,
+      Wart.Throw,
+      Wart.Return,
+      Wart.AsInstanceOf,    // breaks In[A]/Out[A]/St[A] opaque type guarantees
+      Wart.IsInstanceOf,    // same concern
+      Wart.Null,            // pure FP codebase shouldn't need null
+      //Wart.TraversableOps,  // unsafe .head/.last/.tail on collections
+    ),
     libraryDependencies ++= Seq(
       "org.pf4j"                        % "pf4j"                         % "3.12.0"       % Provided,
       "org.typelevel"                  %% "cats-effect"                   % "3.6.3",
@@ -57,6 +72,13 @@ lazy val root = (project in file("."))
       "io.circe"      %% "circe-testing"     % circeVersion % Test,
       "org.typelevel" %% "munit-cats-effect" % "2.0.0"      % Test,
     ),
+
+    prePush := Def.sequential(
+      scalafmtAll,
+      scalafixAll.toTask(""),
+      clean,
+      Test / test,
+    ).value,
 
     // Deploy to Home Assistant addon
     deploy := {

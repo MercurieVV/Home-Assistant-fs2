@@ -43,14 +43,14 @@ object Mqtt {
   }
 
   /** Subscribe to the given topic and return the message stream. */
-  def subscribedMessages[F[_]: Async](
+  def subscribedMessages[F[_]](
     session: Session[F],
     topic: String,
   ): Stream[F, net.sigusr.mqtt.api.Message] =
     Stream.eval(session.subscribe(Vector(topic -> AtMostOnce))) >> session.messages
 
   /** Subscribe to `#` and log every distinct topic seen on the broker. */
-  def logAllTopics[F[_]: {Async, Logger}](session: Session[F]): Stream[F, Nothing] =
+  def logAllTopics[F[_]: Logger](session: Session[F]): Stream[F, Nothing] =
     Stream.eval(session.subscribe(Vector("#" -> AtMostOnce))) >>
       session.messages
         .map(_.topic)

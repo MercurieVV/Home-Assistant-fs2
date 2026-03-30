@@ -1,8 +1,10 @@
 package io.github.mercurievv.home_automation.state
 
+import cats.syntax.all.*
+
 import cats.effect.IO
 import cats.effect.kernel.Resource
-import cats.syntax.all.*
+
 import munit.CatsEffectSuite
 import org.scalacheck.Gen
 

@@ -50,11 +50,13 @@ class HomeAutomationsPlugin extends Plugin {
   given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
   private var runtime: IORuntime = uninitialized
 
   private val fiberRef: AtomicReference[Option[FiberIO[Unit]]] =
     new AtomicReference[Option[FiberIO[Unit]]](None)
 
+  @annotation.nowarn("msg=unused implicit parameter")
   def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative, LoggerFactory, LiftIO}]: F[Unit] =
     val ts = new TypeSystemImpl[F]
     import ts.given
@@ -67,7 +69,7 @@ class HomeAutomationsPlugin extends Plugin {
         .use {
           (
             otel,
-            kvStore,
+            _,
           ) =>
             otel.tracerProvider.tracer("ha-automations").get.flatMap { tracer =>
               given Tracer[F] = tracer
@@ -283,6 +285,7 @@ class HomeAutomationsPlugin extends Plugin {
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
   override def stop(): Unit =
     fiberRef.getAndSet(None) match {
       case Some(fiber) =>

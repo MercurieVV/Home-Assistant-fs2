@@ -21,6 +21,7 @@ class TypeSystemImpl[F[_]] extends TypeSystemWithStates[F] with TypeSystemWithMe
     def eventState: F[EventState] = e.map(_._2)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   override given eventIdMeta: Meta[EventId] =
     Meta[String].imap(s => Topic.parse(s).fold(throw _, identity))(_.value)
 

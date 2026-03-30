@@ -30,7 +30,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
   val processBindings: ActionInput --> ActionOutput =
     Kleisli[[a] =>> F[S[a]], ActionInput, ActionOutput] { case (input, state) =>
       o2S(actionsMap.get(input.map(_._1))).flatten
-        .map { case (outId, action) =>
+        .traverse { case (outId, action) =>
           val inJson = input.map(_._2)
           val messageJson = inJson.value.toJson.noSpaces
           action(state)
@@ -51,7 +51,6 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
                 ),
             )
         }
-        .sequence
         .map(_.flatten)
         .flatTap(output =>
           val messageJson = input.map(_._2).value.toJson.noSpaces

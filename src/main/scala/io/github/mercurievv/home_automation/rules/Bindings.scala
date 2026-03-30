@@ -39,7 +39,7 @@ object Zigbee2Mqtt:
 
   case class DeviceBuilder(deviceName: String):
 
-    def ia[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)(using Monad[[a] =>> F[S[a]]])
+    def ia[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)
       : InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]] =
       InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]](
         id     = In(Topic("zigbee2mqtt", EntityId(deviceName), None)),
