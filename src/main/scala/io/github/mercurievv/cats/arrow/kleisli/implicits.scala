@@ -36,6 +36,8 @@ extension [A, B](f: A -> B)
   inline def k[F[_]: Applicative]: K[F, A, B] =
     Kleisli.fromFunction(f)
 
-extension [F[_], G[_], a, b](k: Kleisli[[x] =>> F[G[x]], a, b]) inline def fromCotext: Kleisli[F, a, G[b]] = ???
+extension [F[_], G[_], a, b](k: Kleisli[[x] =>> F[G[x]], a, b])
+  inline def fromCotext: Kleisli[F, a, G[b]] = k.mapF[F, G[b]](identity)
 
-extension [F[_], G[_], a, b](k: Kleisli[F, a, G[b]]) inline def toContext: Kleisli[[x] =>> F[G[x]], a, b] = ???
+extension [F[_], G[_], a, b](k: Kleisli[F, a, G[b]])
+  inline def toContext: Kleisli[[x] =>> F[G[x]], a, b] = k.mapF[[x] =>> F[G[x]], b](identity)
