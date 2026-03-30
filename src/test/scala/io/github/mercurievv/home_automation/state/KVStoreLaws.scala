@@ -130,6 +130,6 @@ abstract class KVStoreLaws[K, V] extends CatsEffectSuite:
 
   test("law: delete-nonexistent — deleting absent key is a no-op") {
     withStore { store =>
-      sample(genKey).flatMap(k => store.delete(k).map(_ => ()))
+      sample(genKey).flatMap(k => store.delete(k).void)
     }
   }

@@ -76,12 +76,12 @@ object KVStore:
           ),
           put = Kleisli { case (k, v) =>
             (sql"INSERT INTO " ++ dbt.tableNameFragment ++ sql" (key, value) VALUES ($k, $v)" ++
-              sql" ON CONFLICT(key) DO UPDATE SET value = excluded.value").update.run.transact(dbt.transactor).as(())
+              sql" ON CONFLICT(key) DO UPDATE SET value = excluded.value").update.run.transact(dbt.transactor).void
           },
           delete = Kleisli(k =>
             (sql"DELETE FROM " ++ dbt.tableNameFragment ++ sql" WHERE key = $k").update.run
               .transact(dbt.transactor)
-              .as(()),
+              .void,
           ),
           all = Kleisli(_ =>
             (sql"SELECT key, value FROM " ++ dbt.tableNameFragment)
@@ -103,7 +103,7 @@ object KVStore:
     xa: Transactor[F],
   ): F[Unit] =
     (sql"CREATE TABLE IF NOT EXISTS " ++ table ++
-      fr"(key TEXT PRIMARY KEY, value TEXT NOT NULL)").update.run.transact(xa).as(())
+      fr"(key TEXT PRIMARY KEY, value TEXT NOT NULL)").update.run.transact(xa).void
 
 case class AtomicUpdate[F[_], K, V](
   /** return Prev, Next

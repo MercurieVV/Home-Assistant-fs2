@@ -20,7 +20,7 @@ lazy val root = (project in file("."))
     ),
     semanticdbEnabled    := true,
     semanticdbVersion    := scalafixSemanticdb.revision,
-    ThisBuild / scalafixDependencies += "org.typelevel" %% "typelevel-scalafix" % "0.3.1",
+    ThisBuild / scalafixDependencies += "org.typelevel" %% "typelevel-scalafix" % "0.5.0",
     wartremoverWarnings ++= Seq(
       Wart.Var,
       Wart.MutableDataStructures,
