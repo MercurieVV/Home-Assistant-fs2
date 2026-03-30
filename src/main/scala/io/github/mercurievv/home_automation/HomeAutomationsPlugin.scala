@@ -56,88 +56,93 @@ class HomeAutomationsPlugin extends Plugin {
     new AtomicReference[Option[FiberIO[Unit]]](None)
 
   def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative, LoggerFactory, LiftIO}]: F[Unit] =
+    val ts = new TypeSystemImpl[F]
     AppConfig.load[F].flatMap { config =>
       OtelJava
         .autoConfigured[F] { builder =>
           builder.addPropertiesSupplier(() => config.otelProps.asJava)
         }
-        .use { otel =>
-          otel.tracerProvider.tracer("ha-automations").get.flatMap { tracer =>
-            given Tracer[F] = tracer
-            given SelfAwareStructuredLogger[F] = withTracing(summon[SelfAwareStructuredLogger[F]])
+        .product(PersistentDeviceState.create[F, ts.type](ts))
+        .use {
+          (
+            otel,
+            kvStore,
+          ) =>
+            otel.tracerProvider.tracer("ha-automations").get.flatMap { tracer =>
+              given Tracer[F] = tracer
+              given SelfAwareStructuredLogger[F] = withTracing(summon[SelfAwareStructuredLogger[F]])
 
-            val ts = new TypeSystemImpl[F]
-            given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
+              given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
 
-            val addLogContext: ts.EventId => Map[String, String] = topic =>
-              Map(
-                "entityId"  -> topic.entityId.value,
-                "service"   -> topic.service,
-                "eventType" -> topic.eventType.getOrElse(""),
-                "topic"     -> topic.value,
-              )
-            val pluginResources: Resource[
-              F,
-              ((AppConfig.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit)),
-            ] =
-              Async[F]
-                .pure(config.mqtt)
-                .toResource
-                .mproduct(Mqtt.create[F])
-                .mproduct { case (_, session) =>
-                  Wiring.wireRessources[F, ts.EventId, ts.EventState].apply(DeviceState.source[F](session))
-                }
+              val addLogContext: ts.EventId => Map[String, String] = topic =>
+                Map(
+                  "entityId"  -> topic.entityId.value,
+                  "service"   -> topic.service,
+                  "eventType" -> topic.eventType.getOrElse(""),
+                  "topic"     -> topic.value,
+                )
+              val pluginResources: Resource[
+                F,
+                ((AppConfig.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit)),
+              ] =
+                Async[F]
+                  .pure(config.mqtt)
+                  .toResource
+                  .mproduct(Mqtt.create[F])
+                  .mproduct { case (_, session) =>
+                    Wiring.wireRessources[F, ts.EventId, ts.EventState].apply(DeviceState.source[F](session))
+                  }
 
-            val retryPolicy: Stream[F, FiniteDuration] =
-              Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
+              val retryPolicy: Stream[F, FiniteDuration] =
+                Stream.iterate(10.seconds)(d => (d * 2).min(5.minutes))
 
-            type FL[a] = F[List[a]]
-            val o2l: Option ~> List = new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }
+              type FL[a] = F[List[a]]
+              val o2l: Option ~> List = new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }
 
-            given Monad[FL] = composeMonads[F, List]
-            val bindingsTooling = new BindingsTooling[FL]()
-            val bindings = Bindings.create[F, List](bindingsTooling, o2l)
+              given Monad[FL] = composeMonads[F, List]
+              val bindingsTooling = new BindingsTooling[FL]()
+              val bindings = Bindings.create[F, List](bindingsTooling, o2l)
 
-            val bindingsProcessor: BindingsProcessor[F, List] =
-              new BindingsProcessor[F, List](o2l, bindings, addLogContext)
+              val bindingsProcessor: BindingsProcessor[F, List] =
+                new BindingsProcessor[F, List](o2l, bindings, addLogContext)
 
-            Stream
-              .resource(pluginResources)
-              .flatMap { case ((settings, session), (states, _)) =>
-                Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
-                  Wiring
-                    .wire[F, List]
-                    .apply(ts)(
-                      decodeMessage,
-                      encodeMessage,
-                      bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
-                        (
-                          t._1,
-                          ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
+              Stream
+                .resource(pluginResources)
+                .flatMap { case ((settings, session), (states, _)) =>
+                  Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
+                    Wiring
+                      .wire[F, List]
+                      .apply(ts)(
+                        decodeMessage,
+                        encodeMessage,
+                        bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
+                          (
+                            t._1,
+                            ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
+                          ),
                         ),
-                      ),
-                      addLogContext,
-                    )
-                    .apply(((ts, states), session))
-                    .evalMap { case (inputEvent, process) =>
-                      Tracer[F].span("mqtt.message.process").surround {
-                        process
-                          .run(inputEvent)
-                          .handleErrorWith(e =>
-                            SelfAwareStructuredLogger[F].error(e)("Error during event processing").as(Nil),
-                          )
+                        addLogContext,
+                      )
+                      .apply(((ts, states), session))
+                      .evalMap { case (inputEvent, process) =>
+                        Tracer[F].span("mqtt.message.process").surround {
+                          process
+                            .run(inputEvent)
+                            .handleErrorWith(e =>
+                              SelfAwareStructuredLogger[F].error(e)("Error during event processing").as(Nil),
+                            )
+                        }
                       }
-                    }
-                    .drain
-              }
-              .attempts(retryPolicy)
-              .evalMap {
-                case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
-                case Right(_) => Applicative[F].unit
-              }
-              .compile
-              .drain
-          }
+                      .drain
+                }
+                .attempts(retryPolicy)
+                .evalMap {
+                  case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
+                  case Right(_) => Applicative[F].unit
+                }
+                .compile
+                .drain
+            }
         }
     }
 

@@ -21,6 +21,9 @@ object EventTypes {
   object St extends OpaqueApplicative // entity from state holder
   type St[a] = St.Opq[a]
 
+  object Db extends OpaqueApplicative // entity from state holder
+  type Db[a] = Db.Opq[a]
+
   object EntityId extends Opaque[String]
   type EntityId = EntityId.Opq
 

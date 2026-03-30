@@ -44,7 +44,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
                     "inputTopic"    -> input.value._1.value,
                     "inputMessage"  -> messageJson,
                     "outputTopic"   -> outId.value.value,
-                    "outputMessage" -> output.toString,
+                    "outputMessage" -> output.map(_.value._2.toString).toString,
                   ),
                 )(
                   s"Decision making. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outId, output message: $output",
