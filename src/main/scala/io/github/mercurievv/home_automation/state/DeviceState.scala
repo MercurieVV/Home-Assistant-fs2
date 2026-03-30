@@ -83,39 +83,34 @@ object DeviceStateAcessor:
       (MapRef[F, K, Option[V]], KVStore[F, K, V], DataSource[F, K, V]),
       StatesT[F, K, V],
     ] =
-    Kleisli {
-      (
-        mapRef,
-        kvstore,
-        deviceStateSource,
-      ) =>
-        type FO[a] = F[Option[a]]
+    Kleisli { (mapRef, kvstore, deviceStateSource) =>
+      type FO[a] = F[Option[a]]
 
-        given MonoidK[FO] = createApplicativeMonoidK
-        val accessor: Accessor[FO, K, V] =
-          Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+>
-            kvstore.get.toContext <+>
-            Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
+      given MonoidK[FO] = createApplicativeMonoidK
+      val accessor: Accessor[FO, K, V] =
+        Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+>
+          kvstore.get.toContext <+>
+          Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
 
-        val updater: Kleisli[F, (K, V), Unit] =
-          Kleisli { case (k: K, v: V) =>
-            mapRef
-              .apply(k)
-              .modify {
-                case Some(value) =>
-                  val nv = value |+| v
-                  (nv.some, nv)
-                case None => (v.some, v)
-              }
-              .tupleLeft(k)
-          } >>> kvstore.put
+      val updater: Kleisli[F, (K, V), Unit] =
+        Kleisli { case (k: K, v: V) =>
+          mapRef
+            .apply(k)
+            .modify {
+              case Some(value) =>
+                val nv = value |+| v
+                (nv.some, nv)
+              case None => (v.some, v)
+            }
+            .tupleLeft(k)
+        } >>> kvstore.put
 
-        (k: K) =>
-          new Stateful[F, Option[V]] {
-            override def monad: Monad[F] = summon
+      (k: K) =>
+        new Stateful[F, Option[V]] {
+          override def monad: Monad[F] = summon
 
-            override def get: F[Option[V]] = accessor(k)
+          override def get: F[Option[V]] = accessor(k)
 
-            override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
-          }
+          override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
+        }
     }
