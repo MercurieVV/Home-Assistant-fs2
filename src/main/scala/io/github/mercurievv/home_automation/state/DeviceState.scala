@@ -1,20 +1,22 @@
 package io.github.mercurievv.home_automation.state
 
+import io.github.mercurievv.cats.arrow.kleisli.*
+import io.github.mercurievv.cats.createApplicativeMonoidK
 import io.github.mercurievv.home_automation.TypeSystem
 import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 
 import scala.compiletime.deferred
 
-import cats.data.{Kleisli, OptionT}
+import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.Semigroup
 import cats.mtl.Stateful
-import cats.{Id, Monad}
+import cats.{Id, Monad, MonoidK}
 
-import cats.effect.kernel.{Async, Ref, Temporal}
+import cats.effect.kernel.{Async, Temporal}
 import cats.effect.std.MapRef
-import cats.effect.{Concurrent, kernel}
+import cats.effect.{Concurrent, Resource, kernel}
 
 import io.circe.JsonObject
 
@@ -61,15 +63,7 @@ object DeviceState extends Data[Topic, JsonObject] {
 // A layered key lookup: try each accessor in order, return first Some.
 // Combination via SemigroupK: accessor1 <+> accessor2
 // Add more layers later the same way.
-type Accessor[F[_], K, V] = Kleisli[OptionT[F, *], K, V]
-
-object Accessor:
-
-  def fromMapRef[F[_]: Monad, K, V](mr: MapRef[F, K, Option[V]]): Accessor[F, K, V] =
-    Kleisli(k => OptionT(mr(k).get))
-
-  def fromDataSource[F[_]: Monad, K, V](source: DataSource[F, K, V]): Accessor[F, K, V] =
-    Kleisli(k => OptionT(source.fetch(k)))
+type Accessor[F[_], K, V] = Kleisli[F, K, V]
 
 trait TypeSystemWithMeta extends TypeSystem:
   given eventIdMeta: Meta[EventId] = deferred
@@ -77,45 +71,50 @@ trait TypeSystemWithMeta extends TypeSystem:
 
 object PersistentDeviceState {
 
-  def create[F[_]: Async, TS <: TypeSystemWithMeta](ts: TS)
-    : cats.effect.kernel.Resource[F, KVStore[F, ts.EventId, ts.EventState]] = ???
-  // import ts.given
-//    KVStore.file[F, ts.EventId, ts.EventState]("./db/")
-
-  def getAccessors[F[_], K, V](persistentStore: KVStore[F, K, V]) =
-    val getter: Accessor[F, K, V] = Kleisli(k => OptionT(persistentStore.get(k)))
-    val setter: Kleisli[F, (K, V), Unit] = Kleisli(
-      (
-        k,
-        v,
-      ) => persistentStore.put(k, v),
-    )
+  def create[F[_]: Async, TS <: TypeSystemWithMeta](ts: TS): Resource[F, KVStore[F, ts.EventId, ts.EventState]] =
+    KVStore.create[F, ts.EventId, ts.EventState]("./db/")
 }
 
 object DeviceStateAcessor:
 
-  given createStates
-    : [F[_]: Async, K, V: Semigroup] => Kleisli[Id, (DataSource[F, K, V], Ref[F, Map[K, V]]), StatesT[F, K, V]] =
+  given createStates: [F[_]: Async, K, V: Semigroup]
+    => Kleisli[
+      Id,
+      (MapRef[F, K, Option[V]], KVStore[F, K, V], DataSource[F, K, V]),
+      StatesT[F, K, V],
+    ] =
     Kleisli {
       (
-        deviceStateSource: DataSource[F, K, V],
-        ref: Ref[F, Map[K, V]],
+        mapRef,
+        kvstore,
+        deviceStateSource,
       ) =>
-        val mapRef: MapRef[F, K, Option[V]] = MapRef.fromSingleImmutableMapRef(ref)
-        // val bb: Accessor[F, K, V] = Alternative[Kleisli[OptionT[F, *], K, V]].combineK(Accessor.fromMapRef(mapRef), Accessor.fromMapRef(mapRef))
-        val accessor: Accessor[F, K, V] =
-          Accessor.fromMapRef(mapRef) combineK Accessor.fromDataSource(deviceStateSource)
-        val mapRefSetter: Kleisli[F, (K, V), Unit] = Kleisli(
-          (
-            k,
-            v,
-          ) => mapRef.apply(k).update(_ |+| v.some),
-        )
+        type FO[a] = F[Option[a]]
+
+        given MonoidK[FO] = createApplicativeMonoidK
+        val accessor: Accessor[FO, K, V] =
+          Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+>
+            kvstore.get.toContext <+>
+            Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
+
+        val updater: Kleisli[F, (K, V), Unit] =
+          Kleisli { case (k: K, v: V) =>
+            mapRef
+              .apply(k)
+              .modify {
+                case Some(value) =>
+                  val nv = value |+| v
+                  (nv.some, nv)
+                case None => (v.some, v)
+              }
+              .tupleLeft(k)
+          } >>> kvstore.put
+
         (k: K) =>
           new Stateful[F, Option[V]] {
             override def monad: Monad[F] = summon
 
-            override def get: F[Option[V]] = accessor(k).value
+            override def get: F[Option[V]] = accessor(k)
 
             override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
           }

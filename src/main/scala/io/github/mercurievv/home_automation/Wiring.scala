@@ -4,6 +4,7 @@ import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.home_automation.TypeSystem.StatesT
 import io.github.mercurievv.home_automation.impl.TypesWiring
 import io.github.mercurievv.home_automation.state.DeviceStateAcessor
+import io.github.mercurievv.home_automation.state.KVStore
 import io.github.mercurievv.home_automation.state.StateServer
 import io.github.mercurievv.home_automation.state.StateUpdate
 
@@ -16,12 +17,14 @@ import cats.kernel.{Monoid, Semigroup}
 import cats.{Applicative, Id, Monad, MonadThrow, ~>}
 
 import cats.effect.kernel.{Async, Ref, Resource}
+import cats.effect.std.MapRef
 
 import io.circe.Encoder
 import io.circe.syntax.*
 
 import fs2.*
 
+import doobie.util.meta.Meta
 import fetch.DataSource
 import net.sigusr.mqtt.api.{Message, Session}
 import org.typelevel.log4cats.{SelfAwareStructuredLogger, StructuredLogger}
@@ -32,9 +35,9 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     type States = StatesT[F, EventId, EventState]
   }
 
-  def wireRessources[F[_]: {SelfAwareStructuredLogger, Async}, K, V: {Semigroup, Encoder}](
+  def wireRessources[F[_]: {SelfAwareStructuredLogger, Async}, K: Meta, V: {Semigroup, Encoder, Meta}](
     using i2f: Id ~> F,
-  ): Kleisli[Resource[F, *], DataSource[F, K, V], (StatesT[F, K, V], Unit)] =
+  ): Kleisli[Resource[F, *], (Map[K, V], (String, DataSource[F, K, V])), StatesT[F, K, V]] =
     type RF[a] = Resource[F, a]
     type MAPKV = Map[K, V]
     type -->[a, b] = Kleisli[F, a, b]
@@ -47,18 +50,23 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       ) => Kleisli[G, a, b] = k.mapK(f2g)
 
       given f2r: F ~> RF = new (F ~> RF) {
-        def apply[A](fa: F[A]) = fa.toResource
+        def apply[A](fa: F[A]): Resource[F, A] = fa.toResource
       }
 
-      val apply =
-        given map: -->[DataSource[F, K, V], Ref[F, MAPKV]] = Ref.of[F, MAPKV](Map.empty).k
-        val stateServer = StateServer.createStateServer[F, K, V].lmap[Ref[F, MAPKV]](_.get)
-
-        //        summon[DataSource[F, K, V] --> (StatesT[F, K, V], Ref[F, MAPKV])].mapK(f2r) >>> stateServer
-        ((Arrow[-->].id[DataSource[F, K, V]] &&& map) >>> (DeviceStateAcessor
-          .createStates[F, K, V]
-          .mapK(i2f) &&& Arrow[-->].id[(DataSource[F, K, V], Ref[F, Map[K, V]])].map(_._2))).mapK(f2r) >>> stateServer
-          .second[StatesT[F, K, V]]
+      val apply: Kleisli[RF, (MAPKV, (String, DataSource[F, K, V])), StatesT[F, K, V]] =
+        given map: ~~>[MAPKV, Ref[F, MAPKV]] = (m => Ref.of[F, MAPKV](m)).k.mapK(f2r)
+        val mapRef: Ref[F, MAPKV] ~~> MapRef[F, K, Option[V]] = Kleisli.fromFunction(MapRef.fromSingleImmutableMapRef)
+        val stateServer: Kleisli[RF, Ref[F, MAPKV], Unit] =
+          StateServer.createStateServer[F, K, V].lmap[Ref[F, MAPKV]](_.get)
+        type ~~>[a, b] = Kleisli[RF, a, b]
+        import _root_.io.github.mercurievv.minuscles.tuples.transformers.all.*
+        ((map >>> (
+          stateServer
+            &&&
+              (Arrow[~~>].id[Ref[F, MAPKV]] >>> mapRef)
+        )
+          .map(_._2)) *** KVStore.create[F, K, V].first[DataSource[F, K, V]])
+          .map(_.toFlatten) >>> DeviceStateAcessor.createStates[F, K, V].mapK(i2f).mapK(f2r)
     }
     ResourceInit.apply
 
@@ -101,7 +109,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       import epti.*
       type ~~>[a, b] = Kleisli[F, a, b]
       val inputEventWithStates: InputEvent ~~> (ts.States, InputEvent) = Arrow[~~>].lift(_ => mapRef) &&& Arrow[~~>].id
-      val f2fs: F ~> FS = new (F ~> FS) { def apply[A](fa: F[A]) = fa.map(_.pure) }
+      val f2fs: F ~> FS = new (F ~> FS) { def apply[A](fa: F[A]): F[SQ[A]] = fa.map(_.pure) }
       new EventProcessing[-->, EPTTS](
         t            = epti,
         updateState  = (inputEventWithStates >>> stateUpdate.apply).as(mapRef).mapK(f2fs),

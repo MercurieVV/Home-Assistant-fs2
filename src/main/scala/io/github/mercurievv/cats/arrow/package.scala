@@ -1,8 +1,11 @@
 package io.github.mercurievv.cats
 
-import cats.arrow.Arrow
+import cats.arrow.{Arrow, FunctionK}
+import cats.data.OptionT
 import cats.implicits.*
-import cats.{Functor, Monad, Traverse}
+import cats.{Applicative, Functor, Id, Monad, MonoidK, Traverse, ~>}
+
+import cats.effect.kernel.Resource
 
 package object arrow {
 
@@ -33,4 +36,22 @@ def composeMonads[F[_]: Monad, G[_]: {Monad, Traverse}]: Monad[[a] =>> F[G[a]]] 
           },
         )
     }
+}
+
+def createApplicativeMonoidK[F[_]: Applicative, G[_]: MonoidK]: MonoidK[[a] =>> F[G[a]]] =
+  new MonoidK[[a] =>> F[G[a]]] {
+    override def empty[A]: F[G[A]] = MonoidK[G].empty.pure[F]
+    override def combineK[A](
+      x: F[G[A]],
+      y: F[G[A]],
+    ): F[G[A]] = (x, y).mapN { case (x_, y_) => MonoidK[G].combineK(x_, y_) }
+  }
+
+given fo2OptT: [F[_]] => FunctionK[[a] =>> F[Option[a]], OptionT[F, *]] =
+  new FunctionK[[a] =>> F[Option[a]], OptionT[F, *]] {
+    override def apply[A](fa: F[Option[A]]): OptionT[F, A] = OptionT(fa)
+  }
+
+def Id2Resource[F[_]]: Id ~> Resource[F, *] = new FunctionK {
+  def apply[a](fa: Id[a]) = fa.pure[Resource[F, *]]
 }

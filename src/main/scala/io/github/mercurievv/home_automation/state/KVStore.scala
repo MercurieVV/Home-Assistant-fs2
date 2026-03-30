@@ -1,5 +1,7 @@
 package io.github.mercurievv.home_automation.state
 
+import io.github.mercurievv.cats.Id2Resource
+
 import cats.Id
 import cats.data.Kleisli
 import cats.syntax.all.*
@@ -27,6 +29,10 @@ object KVStore:
   /** Meta instance for circe Json — serialised as a TEXT column. */
   given jsonMeta: Meta[Json] =
     Meta[String].imap(s => parser.parse(s).getOrElse(Json.Null))(_.noSpaces)
+
+  def create[F[_]: Async, K: Meta, V: Meta]: Kleisli[Resource[F, *], String, KVStore[F, K, V]] = KVStore.file[F] >>>
+    KVStore.fromTransactor("kv_store").mapK(Id2Resource[F]) >>>
+    KVStore.fromDbTable[F, K, V]
 
   /** Step 1a: file path → Transactor */
   def file[F[_]: Async]: Kleisli[Resource[F, *], String, Transactor[F]] =
@@ -100,6 +106,8 @@ object KVStore:
       fr"(key TEXT PRIMARY KEY, value TEXT NOT NULL)").update.run.transact(xa).as(())
 
 case class AtomicUpdate[F[_], K, V](
+  /** return Prev, Next
+    */
   update: Kleisli[F, (K, Option[V] => Option[V]), (Option[V], Option[V])])
 
 object AtomicUpdate:

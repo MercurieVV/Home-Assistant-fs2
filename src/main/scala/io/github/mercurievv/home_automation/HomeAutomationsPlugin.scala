@@ -57,6 +57,7 @@ class HomeAutomationsPlugin extends Plugin {
 
   def programmF[F[_]: {SelfAwareStructuredLogger, Async, Console, Applicative, LoggerFactory, LiftIO}]: F[Unit] =
     val ts = new TypeSystemImpl[F]
+    import ts.given
     AppConfig.load[F].flatMap { config =>
       OtelJava
         .autoConfigured[F] { builder =>
@@ -83,14 +84,16 @@ class HomeAutomationsPlugin extends Plugin {
                 )
               val pluginResources: Resource[
                 F,
-                ((AppConfig.MqttSettings, Session[F]), (StatesT[F, ts.EventId, ts.EventState], Unit)),
+                ((AppConfig.MqttSettings, Session[F]), StatesT[F, ts.EventId, ts.EventState]),
               ] =
                 Async[F]
                   .pure(config.mqtt)
                   .toResource
                   .mproduct(Mqtt.create[F])
                   .mproduct { case (_, session) =>
-                    Wiring.wireRessources[F, ts.EventId, ts.EventState].apply(DeviceState.source[F](session))
+                    Wiring
+                      .wireRessources[F, ts.EventId, ts.EventState]
+                      .apply((Map.empty, ("./db/", DeviceState.source[F](session))))
                   }
 
               val retryPolicy: Stream[F, FiniteDuration] =
@@ -108,7 +111,7 @@ class HomeAutomationsPlugin extends Plugin {
 
               Stream
                 .resource(pluginResources)
-                .flatMap { case ((settings, session), (states, _)) =>
+                .flatMap { case ((settings, session), states) =>
                   Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
                     Wiring
                       .wire[F, List]
