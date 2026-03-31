@@ -74,9 +74,9 @@ lazy val root = (project in file("."))
     ),
 
     prePush := Def.sequential(
+      clean,
       scalafmtAll,
       scalafixAll.toTask(""),
-      clean,
       Test / test,
     ).value,
 

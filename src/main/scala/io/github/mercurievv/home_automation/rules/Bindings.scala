@@ -114,7 +114,8 @@ object Bindings:
       ),
     ],
   ] = {
-    import bt.*
+    def bindStatefulAction[Action, T] = bt.bindStatefulAction[-->, Action, T](_, _, _)
+    import bt.toggle
     type -->[a, b] = Kleisli[[x] =>> F[S[x]], a, b]
 
     extension [A](sa: InputAction[In[JsonObject] --> A])
@@ -124,32 +125,32 @@ object Bindings:
       )
 
     List(
-      bindStatefulAction[-->, Unit, PowerState](
+      bindStatefulAction[Unit, PowerState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
         Zigbee2Mqtt.d("bedroom_lights").oa[PowerState],
         toggle,
       ),
-      bindStatefulAction[-->, Unit, PowerState](
+      bindStatefulAction[Unit, PowerState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "double_left"),
         Zigbee2Mqtt.d("bedroom_lights").oa[PowerState],
         Out(PowerState(state = OnOffState.On, brightness = 1)).pure,
       ),
-      bindStatefulAction[-->, Unit, BlindsState](
+      bindStatefulAction[Unit, BlindsState](
         Zigbee2Mqtt.d("Bedroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Bedroom blinds").oa[BlindsState],
         toggle,
       ),
-      bindStatefulAction[-->, Unit, PowerState](
+      bindStatefulAction[Unit, PowerState](
         Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
         Zigbee2Mqtt.d("kids_room_lights").oa[PowerState],
         toggle,
       ),
-      bindStatefulAction[-->, Unit, BlindsState](
+      bindStatefulAction[Unit, BlindsState](
         Zigbee2Mqtt.d("Kids room switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_right"),
         Zigbee2Mqtt.d("Kids room blinds").oa[BlindsState],
         toggle,
       ),
-      bindStatefulAction[-->, Float, PowerState](
+      bindStatefulAction[Float, PowerState](
         Zigbee2Mqtt.d("Bathroom TH sensor").ia[F, S, TemperatureHumiditySensor](o2s).map(_.map(_.humidity)),
         Zigbee2Mqtt.d("Bathroom fan plug").oa,
         Arrow[-->].lift { case (_, h) =>
