@@ -102,11 +102,12 @@ object Bindings:
   def create[F[_]: Applicative, S[_]: Applicative](
     bt: BindingsTooling[[a] =>> F[S[a]]],
     o2s: Option ~> S,
+    l2s: List ~> S,
   )(using MFS: Monad[[a] =>> F[S[a]]],
     MSU: MonoidK[S],
   ): Map[
     In[Topic],
-    List[
+    S[
       (
         Out[Topic],
         Kleisli[[a] =>> F[S[a]], Topic, JsonObject] => Kleisli[[a] =>> F[S[a]], In[JsonObject], Out[JsonObject]],
@@ -155,5 +156,5 @@ object Bindings:
           if h > 70 then Out(PowerState(state = OnOffState.On)) else Out(PowerState(state = OnOffState.Off))
         },
       ),
-    ).groupMap(_._1)(_._2)
+    ).groupMap(_._1)(_._2).view.mapValues(l2s.apply).toMap
   }

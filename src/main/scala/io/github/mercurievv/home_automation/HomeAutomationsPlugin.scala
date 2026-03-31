@@ -1,5 +1,6 @@
 package io.github.mercurievv.home_automation
 
+import cats.arrow.FunctionK
 import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.cats.composeMonads
 import io.github.mercurievv.home_automation.AppConfig
@@ -16,25 +17,19 @@ import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 import io.github.mercurievv.home_automation.state.*
 
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
-
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.{Applicative, Id, Monad, ~>}
-
+import cats.{Applicative, Id, Monad, MonoidK, Traverse, ~>}
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.Console
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO, LiftIO}
-
 import io.circe.{Encoder, JsonObject}
-
 import fs2.*
-
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
@@ -77,24 +72,21 @@ class HomeAutomationsPlugin extends Plugin {
 
               given Id ~> F = new (Id ~> F) { def apply[A](fa: Id[A]) = fa.pure }
 
-              val addLogContext: ts.EventId => Map[String, String] = topic =>
+              val addLogContext: Topic => Map[String, String] = topic =>
                 Map(
                   "entityId"  -> topic.entityId.value,
                   "service"   -> topic.service,
                   "eventType" -> topic.eventType.getOrElse(""),
                   "topic"     -> topic.value,
                 )
-              val pluginResources: Resource[
-                F,
-                ((AppConfig.MqttSettings, Session[F]), StatesT[F, ts.EventId, ts.EventState]),
-              ] =
+              val pluginResources: Resource[F, ((AppConfig.MqttSettings, Session[F]), StatesT[F, Topic, JsonObject])] =
                 Async[F]
                   .pure(config.mqtt)
                   .toResource
                   .mproduct(Mqtt.create[F])
                   .mproduct { case (_, session) =>
                     Wiring
-                      .wireRessources[F, ts.EventId, ts.EventState]
+                      .wireRessources[F, Topic, JsonObject]
                       .apply((Map.empty, ("./db/", DeviceState.source[F](session))))
                   }
 
@@ -105,12 +97,14 @@ class HomeAutomationsPlugin extends Plugin {
               val o2l: Option ~> List = new (Option ~> List) { def apply[A](fa: Option[A]) = fa.toList }
 
               given Monad[FL] = composeMonads[F, List]
-              val bindingsTooling = new BindingsTooling[FL]()
-              val bindings = Bindings.create[F, List](bindingsTooling, o2l)
 
-              val bindingsProcessor: BindingsProcessor[F, List] =
-                new BindingsProcessor[F, List](o2l, bindings, addLogContext)
-
+              val bindingsProcessor = createBindingProcessor(addLogContext, o2l, FunctionK.id)
+              val processBindingFunction = bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
+                (
+                  t._1,
+                  ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
+                ),
+              )
               Stream
                 .resource(pluginResources)
                 .flatMap { case ((settings, session), states) =>
@@ -120,12 +114,7 @@ class HomeAutomationsPlugin extends Plugin {
                       .apply(ts)(
                         decodeMessage,
                         encodeMessage,
-                        bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
-                          (
-                            t._1,
-                            ((k: Topic) => t._2(k).get.flatMap(_.getOrElse(JsonObject.empty).pure[List].pure[F])).k,
-                          ),
-                        ),
+                        processBindingFunction,
                         addLogContext,
                       )
                       .apply(((ts, states), session))
@@ -150,6 +139,13 @@ class HomeAutomationsPlugin extends Plugin {
             }
         }
     }
+
+  def createBindingProcessor[F[_] : {SelfAwareStructuredLogger, Async, Applicative}, S[_]: {Applicative, MonoidK, Monad, Traverse}](addLogContext: Topic => Map[String, String], o2s: Option ~> S, l2s: List ~> S)(using Monad[[a] =>> F[S[a]]]): BindingsProcessor[F, S] = {
+    val bindingsTooling = new BindingsTooling[[a] =>> F[S[a]]]()
+    val bindings = Bindings.create[F, S](bindingsTooling, o2s, l2s)
+
+    new BindingsProcessor[F, S](o2s, bindings, addLogContext)
+  }
 
   /** Loads config values needed by logback.xml as temporary system properties for the duration of doConfigure(), then
     * clears them. System properties are resolved by logback's ${...} substitution but are never merged into MDC, so
