@@ -110,12 +110,18 @@ class HomeAutomationsPlugin extends Plugin {
                 .flatMap { case ((settings, session), states) =>
                   Stream.eval(session.subscribe(Vector(settings.topic -> AtMostOnce))) >>
                     Wiring
-                      .wire[F, List]
+                      .wire[F, List, Stream[F, *]]
                       .apply(ts)(
-                        decodeMessage,
-                        encodeMessage,
+                        Kleisli((c: Session[F]) => c.messages.map(decodeMessage)),
+                        Kleisli(producer =>
+                          Kleisli[FL, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
+                            val msg = encodeMessage(oe)
+                            producer.publish(msg.topic, msg.payload).map(_.pure[List])
+                          ).pure[Stream[F, *]]
+                        ),
                         processBindingFunction,
                         addLogContext,
+                        new (Id ~> Stream[F, *]) { def apply[A](fa: A): Stream[F, A] = Stream.emit(fa) },
                       )
                       .apply(((ts, states), session))
                       .evalMap { case (inputEvent, process) =>

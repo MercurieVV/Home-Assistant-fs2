@@ -10,7 +10,7 @@ import io.github.mercurievv.home_automation.state.StateUpdate
 
 import scala.language.experimental.pureFunctions
 
-import cats.arrow.{Arrow, FunctionK}
+import cats.arrow.Arrow
 import cats.data.Kleisli
 import cats.implicits.*
 import cats.kernel.{Monoid, Semigroup}
@@ -22,11 +22,9 @@ import cats.effect.std.MapRef
 import io.circe.Encoder
 import io.circe.syntax.*
 
-import fs2.*
-
 import doobie.util.meta.Meta
 import fetch.DataSource
-import net.sigusr.mqtt.api.{Message, Session}
+import net.sigusr.mqtt.api.Session
 import org.typelevel.log4cats.{SelfAwareStructuredLogger, StructuredLogger}
 
 object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
@@ -70,18 +68,19 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     }
     ResourceInit.apply
 
-  def wire[F[_]: {MonadThrow, SelfAwareStructuredLogger}, SQ[_]: Applicative](
+  def wire[F[_]: {MonadThrow, SelfAwareStructuredLogger}, SQ[_]: Applicative, S[_]: Monad](
     ts: TypeSystemWithStates[F],
   )(
-    decodeMessage: Message => ts.InputEvent,
-    encodeMessage: ts.OutputEvent => Message,
+    consume: Kleisli[S, Session[F], ts.InputEvent],
+    produce: Kleisli[S, Session[F], Kleisli[[a] =>> F[SQ[a]], ts.OutputEvent, Unit]],
     decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
     addLogContext: ts.EventId => Map[String, String],
+    idToStream: Id ~> S,
   )(using MES: Monoid[ts.EventState],
     MFS: Monad[[a] =>> F[SQ[a]]],
     ESE: _root_.io.circe.Encoder[ts.EventState],
   ): Kleisli[
-    Stream[F, _],
+    S,
     ((ts.type, ts.States), Session[F]),
     (ts.InputEvent, Kleisli[[a] =>> F[SQ[a]], ts.InputEvent, Unit]),
   ] = {
@@ -93,7 +92,6 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     val espti = eventStreamProcessingTypes
 
     type -->[A, B] = Kleisli[FS, A, B]
-    type S[b] = Stream[F, b]
     type ==>[A, B] = Kleisli[S, A, B]
 
     type StateUpdateTSI = StateUpdateTS[Kleisli[F, *, *], ts.States]
@@ -138,19 +136,12 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
 
     type ESP = EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP]
     given Kleisli[Id, EP, ESP] = Kleisli((epp: EP) =>
+      val consumeK = consume
+      val produceK = produce
       new EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP](espti, epp) {
         import espt.*
-
-        override val consume: Consumer ==> ep.t.InputEvent = Kleisli((c: Consumer) => c.messages)
-          .map(decodeMessage)
-
-        override val produce: Producer ==> (ep.t.OutputEvent --> Unit) =
-          Kleisli(producer =>
-            Kleisli[FS, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
-              val msg = encodeMessage(oe)
-              producer.publish(msg.topic, msg.payload).map(_.pure[SQ]),
-            ).pure[S],
-          )
+        override val consume: Consumer ==> ep.t.InputEvent          = consumeK
+        override val produce: Producer ==> (ep.t.OutputEvent --> Unit) = produceK
       },
     )
 
@@ -159,8 +150,6 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       (ESP, (espti.Consumer, espti.Producer)),
       (epti.InputEvent, epti.InputEvent --> Unit),
     ] = Kleisli(_.run(_))
-
-    given idToStream: Id ~> S = FunctionK.lift([A] => (a: A) => Stream.emit(a))
 
     summon[Kleisli[Id, ((TS, ts.States), espti.Consumer), (ESP, (espti.Consumer, espti.Producer))]]
       .mapK[S](idToStream) >>> processStream
