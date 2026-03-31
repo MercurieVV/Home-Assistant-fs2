@@ -1,6 +1,5 @@
 package io.github.mercurievv.home_automation
 
-import cats.arrow.FunctionK
 import io.github.mercurievv.cats.arrow.kleisli.*
 import io.github.mercurievv.cats.composeMonads
 import io.github.mercurievv.home_automation.AppConfig
@@ -17,19 +16,26 @@ import io.github.mercurievv.home_automation.rules.EventTypes.Topic
 import io.github.mercurievv.home_automation.state.*
 
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.compiletime.uninitialized
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
+
+import cats.arrow.FunctionK
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.{Applicative, Id, Monad, MonoidK, Traverse, ~>}
+import cats.{Applicative, Id, Monad, MonoidK, Show, Traverse, ~>}
+
 import cats.effect.implicits.*
 import cats.effect.kernel.{Async, Resource}
 import cats.effect.std.Console
 import cats.effect.unsafe.IORuntime
 import cats.effect.{FiberIO, IO, LiftIO}
+
 import io.circe.{Encoder, JsonObject}
+
 import fs2.*
+
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
 import net.sigusr.mqtt.api.QualityOfService.AtMostOnce
@@ -116,8 +122,8 @@ class HomeAutomationsPlugin extends Plugin {
                         Kleisli(producer =>
                           Kleisli[FL, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
                             val msg = encodeMessage(oe)
-                            producer.publish(msg.topic, msg.payload).map(_.pure[List])
-                          ).pure[Stream[F, *]]
+                            producer.publish(msg.topic, msg.payload).map(_.pure[List]),
+                          ).pure[Stream[F, *]],
                         ),
                         processBindingFunction,
                         addLogContext,
@@ -146,11 +152,21 @@ class HomeAutomationsPlugin extends Plugin {
         }
     }
 
-  def createBindingProcessor[F[_] : {SelfAwareStructuredLogger, Async, Applicative}, S[_]: {Applicative, MonoidK, Monad, Traverse}](addLogContext: Topic => Map[String, String], o2s: Option ~> S, l2s: List ~> S)(using Monad[[a] =>> F[S[a]]]): BindingsProcessor[F, S] = {
+  def createBindingProcessor[
+    F[_]: {SelfAwareStructuredLogger, Async, Applicative},
+    S[_]: {Applicative, MonoidK, Monad, Traverse},
+  ](
+    addLogContext: Topic => Map[String, String],
+    o2s: Option ~> S,
+    l2s: List ~> S,
+  )(using Monad[[a] =>> F[S[a]]],
+  ): BindingsProcessor[F, S, Topic, JsonObject] = {
     val bindingsTooling = new BindingsTooling[[a] =>> F[S[a]]]()
     val bindings = Bindings.create[F, S](bindingsTooling, o2s, l2s)
 
-    new BindingsProcessor[F, S](o2s, bindings, addLogContext)
+    given Show[Topic] = Show.show(_.value)
+    given Show[JsonObject] = Show.show(_.toJson.noSpaces)
+    new BindingsProcessor[F, S, Topic, JsonObject](o2s, bindings, addLogContext)
   }
 
   /** Loads config values needed by logback.xml as temporary system properties for the duration of doConfigure(), then

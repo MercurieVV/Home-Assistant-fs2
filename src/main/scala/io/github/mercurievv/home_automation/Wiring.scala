@@ -140,7 +140,7 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
       val produceK = produce
       new EventsStreamProcessing[==>, -->, ESPTTS, EPTTS, EP](espti, epp) {
         import espt.*
-        override val consume: Consumer ==> ep.t.InputEvent          = consumeK
+        override val consume: Consumer ==> ep.t.InputEvent = consumeK
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) = produceK
       },
     )

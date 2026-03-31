@@ -1,16 +1,14 @@
 package io.github.mercurievv.home_automation.rules
 
-import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out, Topic}
+import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out}
 
 import cats.data.Kleisli
 import cats.implicits.*
-import cats.{Functor, Monad, Traverse, ~>}
-
-import io.circe.JsonObject
+import cats.{Functor, Monad, Show, Traverse, ~>}
 
 import org.typelevel.log4cats.StructuredLogger
 
-class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}](
+class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}, Topic: Show, JsonObject: Show](
   o2S: Option ~> S,
   actionsMap: Map[
     In[Topic],
@@ -32,18 +30,18 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
       o2S(actionsMap.get(input.map(_._1))).flatten
         .traverse { case (outId, action) =>
           val inJson = input.map(_._2)
-          val messageJson = inJson.value.toJson.noSpaces
           action(state)
             .apply(inJson)
             .map(_.map((outId, _).tupled))
             .flatTap(output =>
+              val messageJson = inJson.value.show
               StructuredLogger[F]
                 .addContext(addLogContext(input.value._1) ++ Map("event" -> "decision_making"))
                 .debug(
                   Map(
-                    "inputTopic"    -> input.value._1.value,
+                    "inputTopic"    -> input.value._1.show,
                     "inputMessage"  -> messageJson,
-                    "outputTopic"   -> outId.value.value,
+                    "outputTopic"   -> outId.value.show,
                     "outputMessage" -> output.map(_.value._2.toString).toString,
                   ),
                 )(
@@ -53,7 +51,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
         }
         .map(_.flatten)
         .flatTap(output =>
-          val messageJson = input.map(_._2).value.toJson.noSpaces
+          val messageJson = input.map(_._2).value.show
           val outVal = output.map(_.value)
           val outputTopic = outVal.map(_._1.toString)
           val outJson = outVal.map(_._2.toString).toString
@@ -61,7 +59,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
             .addContext(addLogContext(input.value._1) ++ Map("event" -> "decision_done"))
             .info(
               Map(
-                "inputTopic"    -> input.value._1.value,
+                "inputTopic"    -> input.value._1.show,
                 "inputMessage"  -> messageJson,
                 "outputTopic"   -> outputTopic.toString,
                 "outputMessage" -> outJson,

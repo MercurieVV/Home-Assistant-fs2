@@ -1,0 +1,16 @@
+<configuration>
+  <conversionRule conversionWord="flatMdc" converterClass="io.github.mercurievv.home_automation.logging.FlatMdcConverter"/>
+
+  <!-- Base appenders -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%boldBlue(%d{YYYY-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %magenta(%marker) [%X{trace_id}] %cyan(%logger{10}) - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="io.github.mercurievv.home_automation" level="DEBUG"/>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>
