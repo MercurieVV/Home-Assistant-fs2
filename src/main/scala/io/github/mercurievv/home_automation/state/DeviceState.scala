@@ -68,17 +68,28 @@ object DeviceStateAcessor:
       type FO[a] = F[Option[a]]
 
       given MonoidK[FO] = createApplicativeMonoidK
-      val accessor: Accessor[FO, K, V] =
-        Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+>
-          kvstore.get.toContext <+>
+      val persistedAccessor: Accessor[FO, K, V] =
+        Kleisli[FO, K, V]((k: K) => mapRef(k).get) <+> kvstore.get.toContext
+      val getter: Accessor[FO, K, V] =
+        persistedAccessor <+>
           Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
+
+      def updatter(m: Option[V] => Option[V]): Kleisli[F, K, Unit] =
+        (Kleisli.ask[F, K] &&& Kleisli(k =>
+          mapRef(k).updateAndGet(m).flatMap(_.liftTo[F](new NoSuchElementException(k.toString))),
+        )) >>> kvstore.put
 
       (k: K) =>
         new Stateful[F, Option[V]] {
           override def monad: Monad[F] = summon
 
-          override def get: F[Option[V]] = accessor(k)
+          override def get: F[Option[V]] = getter(k)
 
-          override def set(s: Option[V]): F[Unit] = mapRef(k).update(_ |+| s)
+          override def set(s: Option[V]): F[Unit] = modify(_ |+| s)
+
+          // Override to avoid calling deviceStateSource.fetch (which publishes {topic}/get → feedback loop).
+          // State updates from incoming events should only consult persisted state (mapRef + kvstore).
+          override def modify(f: Option[V] => Option[V]): F[Unit] =
+            updatter(f)(k)
         }
     }
