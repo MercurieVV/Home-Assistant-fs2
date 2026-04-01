@@ -13,7 +13,8 @@ import pureconfig.generic.derivation.default.*
 
 object AppConfig {
 
-  val configPath: Path = Paths.get(Option.apply(System.getenv(s"PLUGINS_DIR/ha-java.conf")).getOrElse("./ha-java.conf"))
+  val configPath: Path =
+    Paths.get(Option.apply(System.getenv(s"PLUGINS_DIR") + "/ha-java.conf").getOrElse("./local.conf"))
 
   // Custom readers defined before the case classes that use them
   private given ConfigReader[Host] = ConfigReader[String].emap(s =>
