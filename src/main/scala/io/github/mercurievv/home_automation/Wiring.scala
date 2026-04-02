@@ -76,6 +76,8 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
     decisionMaking: Kleisli[[a] =>> F[SQ[a]], (ts.InputEvent, ts.States), ts.OutputEvent],
     addLogContext: ts.EventId => Map[String, String],
     idToStream: Id ~> S,
+    preFilterK: Kleisli[S, ts.InputEvent, ts.InputEvent],
+    if_Z2mBridgeGroups_then_splitK: Kleisli[S, ts.InputEvent, ts.InputEvent],
   )(using MES: Monoid[ts.EventState],
     MFS: Monad[[a] =>> F[SQ[a]]],
     ESE: _root_.io.circe.Encoder[ts.EventState],
@@ -142,6 +144,8 @@ object Wiring extends BackwardAutoArrow[Kleisli[Id, _, _]] {
         import espt.*
         override val consume: Consumer ==> ep.t.InputEvent = consumeK
         override val produce: Producer ==> (ep.t.OutputEvent --> Unit) = produceK
+        override val preFilter: ep.t.InputEvent ==> ep.t.InputEvent = preFilterK
+        override val if_Z2mBridgeGroups_then_split: ep.t.InputEvent ==> ep.t.InputEvent = if_Z2mBridgeGroups_then_splitK
       },
     )
 

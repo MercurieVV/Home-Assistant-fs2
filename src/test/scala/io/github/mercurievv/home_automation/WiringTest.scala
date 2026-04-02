@@ -49,11 +49,13 @@ class WiringTest extends CatsEffectSuite {
       publishedRef <- Ref.of[IO, Option[TestTS.OutputEvent]](None)
 
       pipeline = Wiring.wire[IO, Id, Id](TestTS)(
-        consume        = Kleisli.pure(inputEvent),
-        produce        = Kleisli.pure(Kleisli(oe => publishedRef.set(Some(oe)))),
-        decisionMaking = Kleisli.pure(outputEvent),
-        addLogContext  = _ => Map.empty,
-        idToStream     = FunctionK.id[Id],
+        consume                        = Kleisli.pure(inputEvent),
+        produce                        = Kleisli.pure(Kleisli(oe => publishedRef.set(Some(oe)))),
+        decisionMaking                 = Kleisli.pure(outputEvent),
+        addLogContext                  = _ => Map.empty,
+        idToStream                     = FunctionK.id[Id],
+        preFilterK                     = Kleisli.ask,
+        if_Z2mBridgeGroups_then_splitK = Kleisli.ask,
       )
 
       (event, publish) = pipeline.run(((TestTS, noopStates), stubSession[IO]))

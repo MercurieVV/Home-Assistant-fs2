@@ -33,11 +33,15 @@ trait EventsStreamProcessing[
   import espt.*
 
   val consume: Consumer ==> InputEvent
+  val preFilter: InputEvent ==> InputEvent
+  val if_Z2mBridgeGroups_then_split: InputEvent ==> InputEvent
   val produce: Producer ==> (OutputEvent --> Unit)
 
   type EventProcessor = (InputEvent, InputEvent --> Unit)
 
-  lazy val run: (Consumer, Producer) ==> EventProcessor = (consume *** produce) >>>
+  lazy val consumeAndPreprocess: Consumer ==> InputEvent = consume >>> preFilter >>> if_Z2mBridgeGroups_then_split
+
+  lazy val run: (Consumer, Producer) ==> EventProcessor = (consumeAndPreprocess *** produce) >>>
     Arrow[==>].lift { case (inputEvent, publish) =>
       (
         inputEvent,

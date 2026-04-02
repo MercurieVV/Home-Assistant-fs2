@@ -12,7 +12,7 @@ import io.github.mercurievv.home_automation.mqtt.Mqtt
 import io.github.mercurievv.home_automation.rules.Bindings
 import io.github.mercurievv.home_automation.rules.BindingsProcessor
 import io.github.mercurievv.home_automation.rules.BindingsTooling
-import io.github.mercurievv.home_automation.rules.EventTypes.Topic
+import io.github.mercurievv.home_automation.rules.EventTypes.{EntityId, In, Topic}
 import io.github.mercurievv.home_automation.state.*
 
 import java.util.concurrent.atomic.AtomicReference
@@ -118,7 +118,7 @@ class HomeAutomationsPlugin extends Plugin {
                     Wiring
                       .wire[F, List, Stream[F, *]]
                       .apply(ts)(
-                        Kleisli((c: Session[F]) => c.messages.map(decodeMessage)),
+                        Kleisli((c: Session[F]) => c.messages.map(decodeMessage).flatMap(Stream.emits)),
                         Kleisli(producer =>
                           Kleisli[FL, ts.OutputEvent, Unit]((oe: ts.OutputEvent) =>
                             val msg = encodeMessage(oe)
@@ -128,6 +128,26 @@ class HomeAutomationsPlugin extends Plugin {
                         processBindingFunction,
                         addLogContext,
                         new (Id ~> Stream[F, *]) { def apply[A](fa: A): Stream[F, A] = Stream.emit(fa) },
+                        preFilterK = Kleisli((ie: ts.InputEvent) =>
+                          fs2.Stream
+                            .emit(ie)
+                            .filterNot { v =>
+                              val entityIdStr = v.value._1.value
+                              entityIdStr.contains("mikrotik") ||
+                              entityIdStr.contains("archer") ||
+                              (v.value._1.service == "ha" && v.value._2.toString.contains("measurement"))
+                            }
+                            .covary[F],
+                        ),
+                        if_Z2mBridgeGroups_then_splitK = Kleisli((ie: ts.InputEvent) =>
+                          if ie.value._1 == Topic("zigbee2mqtt", EntityId("bridge"), Some("groups")) then
+                            Stream.emits(
+                              for {
+                                name <- ie.value._2("friendly_name").flatMap(_.asString).toList
+                              } yield In((Topic("zigbee2mqtt", EntityId(name), None), ie.value._2)),
+                            )
+                          else Stream.emit(ie),
+                        ),
                       )
                       .apply(((ts, states), session))
                       .evalMap { case (inputEvent, process) =>
