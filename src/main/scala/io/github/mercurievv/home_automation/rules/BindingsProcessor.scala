@@ -19,7 +19,8 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
       ),
     ],
   ],
-  addLogContext: Topic => Map[String, String]) {
+  addLogContext: Topic => Map[String, String],
+)(using Show[S[String]]) {
   given Functor[S] = summon[Monad[S]]
   type -->[a, b] = Kleisli[[a] =>> F[S[a]], a, b]
   type ActionInput = (In[(Topic, JsonObject)], Topic --> JsonObject)
@@ -42,7 +43,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
                     "inputTopic"    -> input.value._1.show,
                     "inputMessage"  -> messageJson,
                     "outputTopic"   -> outId.value.show,
-                    "outputMessage" -> output.map(_.value._2.toString).toString,
+                    "outputMessage" -> output.map(_.value._2.show).show,
                   ),
                 )(
                   s"Decision making. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outId, output message: $output",
@@ -50,7 +51,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
             )
         }
         .map(_.flatten)
-        .flatTap(output =>
+    /*        .flatTap(output =>
           val messageJson = input.map(_._2).value.show
           val outVal = output.map(_.value)
           val outputTopic = outVal.map(_._1.toString)
@@ -67,7 +68,7 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
             )(
               s"Decision done. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outputTopic, output message: $outJson",
             ),
-        )
+        )*/
     }
 
 }
