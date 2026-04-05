@@ -36,17 +36,24 @@ class InfluxDbAppender extends AppenderBase[ILoggingEvent]:
     if influxDB != null then influxDB.close()
     super.stop()
 
+  // High-cardinality MDC keys must be fields, not tags (InfluxDB tags are indexed
+  // and have a cardinality limit of 100k unique values per key).
+  private val highCardinalityMdcKeys = Set("span_id", "trace_id", "parent_id", "parent_span_id")
+
   override def append(event: ILoggingEvent): Unit =
+    val mdc = event.getMDCPropertyMap.asScala.toMap
+    val mdcFields = mdc.filter { case (k, _) => highCardinalityMdcKeys.contains(k) }
+    val mdcTags = mdc.filterNot { case (k, _) => highCardinalityMdcKeys.contains(k) }
     val point = Point
       .measurement(measurement)
       .time(event.getTimeStamp, TimeUnit.MILLISECONDS)
       .tag("level", event.getLevel.toString)
       .tag("logger", event.getLoggerName)
-      .tag(event.getMDCPropertyMap)
+      .tag(mdcTags.asJava)
       .tag(
         "markers",
         Option(event.getMarkerList).map(_.asScala.map(_.getName).mkString(",")).getOrElse(""),
       )
       .addField("message", event.getFormattedMessage)
-      .build()
-    influxDB.write(point)
+    mdcFields.foreach { case (k, v) => point.addField(k, v) }
+    influxDB.write(point.build())

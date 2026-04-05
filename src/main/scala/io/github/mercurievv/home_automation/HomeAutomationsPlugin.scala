@@ -104,6 +104,8 @@ class HomeAutomationsPlugin extends Plugin {
 
               given Monad[FL] = composeMonads[F, List]
 
+              given catsStdShowForList: [A: Show] => Show[List[A]] =
+                _.iterator.map(Show[A].show).mkString("", ";", "")
               val bindingsProcessor = createBindingProcessor(addLogContext, o2l, FunctionK.id)
               val processBindingFunction = bindingsProcessor.processBindings.lmap[(ts.InputEvent, ts.States)](t =>
                 (
@@ -180,6 +182,7 @@ class HomeAutomationsPlugin extends Plugin {
     o2s: Option ~> S,
     l2s: List ~> S,
   )(using Monad[[a] =>> F[S[a]]],
+    Show[S[String]],
   ): BindingsProcessor[F, S, Topic, JsonObject] = {
     val bindingsTooling = new BindingsTooling[[a] =>> F[S[a]]]()
     val bindings = Bindings.create[F, S](bindingsTooling, o2s, l2s)

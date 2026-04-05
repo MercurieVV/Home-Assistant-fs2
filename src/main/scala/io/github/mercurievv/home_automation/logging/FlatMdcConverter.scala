@@ -10,7 +10,7 @@ class FlatMdcConverter extends ClassicConverter {
 
   override def convert(event: ILoggingEvent): String = {
     val entries = event.getMDCPropertyMap.asScala
-      .filter { case (_, v) => v != null && v.nonEmpty && !v.startsWith("{") && !v.startsWith("[") }
+      .filter { case (_, v) => v != null && v.nonEmpty && !v.startsWith("{") && !v.startsWith("[") && !v.contains(",") }
       .map { case (k, v) => s"$k=$v" }
       .mkString(",")
     if entries.isEmpty then "" else "," + entries
