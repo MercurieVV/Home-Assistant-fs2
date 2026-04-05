@@ -88,6 +88,14 @@ lazy val root = (project in file("."))
       val deleteCode = Seq("curl", "-f", "-X", "DELETE", s"$baseUrl/knns-home-automations:1.0.0")
         .!(ProcessLogger(println, System.err.println))
       println(s"Deleted exit code: $deleteCode")
+      val configCode = Seq(
+        "curl",
+        "-f",
+        "-F",
+        s"file=@${"./ha-java.conf"}",
+        baseUrl,
+      ).!(ProcessLogger(println, System.err.println))
+      println(s"Config exit code: $configCode")
       val exitCode = Seq(
         "curl",
         "-f",
