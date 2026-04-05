@@ -52,7 +52,10 @@ trait TypeSystemWithMeta extends TypeSystem:
 
 object PersistentDeviceState {
 
-  def create[F[_]: Async, TS <: TypeSystemWithMeta](ts: TS): Resource[F, KVStore[F, ts.EventId, ts.EventState]] =
+  def create[F[_]: Async, TS <: TypeSystemWithMeta](ts: TS): Resource[
+    F,
+    (KVStore[F, ts.EventId, ts.EventState], AtomicUpdate[F, ts.EventId, ts.EventState]),
+  ] =
     KVStore.create[F, ts.EventId, ts.EventState]("./db/")
 }
 
@@ -61,10 +64,10 @@ object DeviceStateAcessor:
   given createStates: [F[_]: Async, K, V: Semigroup]
     => Kleisli[
       Id,
-      (MapRef[F, K, Option[V]], KVStore[F, K, V], DataSource[F, K, V]),
+      (MapRef[F, K, Option[V]], KVStore[F, K, V], AtomicUpdate[F, K, V], DataSource[F, K, V]),
       StatesT[F, K, V],
     ] =
-    Kleisli { (mapRef, kvstore, deviceStateSource) =>
+    Kleisli { (mapRef, kvstore, _, deviceStateSource) =>
       type FO[a] = F[Option[a]]
 
       given MonoidK[FO] = createApplicativeMonoidK
@@ -74,10 +77,15 @@ object DeviceStateAcessor:
         persistedAccessor <+>
           Kleisli[FO, K, V]((k: K) => deviceStateSource.fetch(k))
 
-      def updatter(m: Option[V] => Option[V]): Kleisli[F, K, Unit] =
-        (Kleisli.ask[F, K] &&& Kleisli(k =>
-          mapRef(k).updateAndGet(m).flatMap(_.liftTo[F](new NoSuchElementException(k.toString))),
-        )) >>> kvstore.put
+      def updatter(f: Option[V] => Option[V]): Kleisli[F, K, Unit] =
+        Kleisli((k: K) => mapRef(k).update(f))
+
+      /*
+      def updatter(f: Option[V] => Option[V]): Kleisli[F, K, Unit] =
+        (Kleisli((k: K) => mapRef(k).update(f)) &&& (
+          (Kleisli.ask[F, K] &&& Kleisli.pure(f)) >>> atomicUpdate.update
+        )).void
+       */
 
       (k: K) =>
         new Stateful[F, Option[V]] {

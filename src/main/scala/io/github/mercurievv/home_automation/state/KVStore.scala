@@ -11,6 +11,7 @@ import cats.effect.kernel.{Async, Resource}
 import io.circe.{Json, parser}
 
 import doobie.*
+import doobie.free.connection
 import doobie.implicits.*
 
 case class DbTable[F[_]](
@@ -30,9 +31,10 @@ object KVStore:
   given jsonMeta: Meta[Json] =
     Meta[String].imap(s => parser.parse(s).getOrElse(Json.Null))(_.noSpaces)
 
-  def create[F[_]: Async, K: Meta, V: Meta]: Kleisli[Resource[F, *], String, KVStore[F, K, V]] = KVStore.file[F] >>>
+  def create[F[_]: Async, K: Meta, V: Meta]
+    : Kleisli[Resource[F, *], String, (KVStore[F, K, V], AtomicUpdate[F, K, V])] = KVStore.file[F] >>>
     KVStore.fromTransactor("kv_store").mapK(Id2Resource[F]) >>>
-    KVStore.fromDbTable[F, K, V]
+    (KVStore.fromDbTable[F, K, V] &&& Kleisli(v => Id2Resource[F](AtomicUpdate.sqlite(v))))
 
   /** Step 1a: file path → Transactor */
   def file[F[_]: Async]: Kleisli[Resource[F, *], String, Transactor[F]] =
@@ -120,6 +122,7 @@ object AtomicUpdate:
             prev <- (sql"SELECT value FROM " ++ dbTable.tableNameFragment ++ sql" WHERE key = $key").query[V].option
             next = f(prev)
             _ <- next match
+              case `prev`  => connection.pure(0)
               case Some(v) =>
                 (sql"INSERT INTO " ++ dbTable.tableNameFragment ++ sql" (key, value) VALUES ($key, $v)" ++
                   sql" ON CONFLICT(key) DO UPDATE SET value = excluded.value").update.run
