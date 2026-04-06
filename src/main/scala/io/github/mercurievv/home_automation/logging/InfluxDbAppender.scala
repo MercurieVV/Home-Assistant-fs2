@@ -29,7 +29,14 @@ class InfluxDbAppender extends AppenderBase[ILoggingEvent]:
   override def start(): Unit =
     influxDB = InfluxDBFactory.connect(url, user, password)
     influxDB.setDatabase(database)
-    influxDB.enableBatch(100, 500, TimeUnit.MILLISECONDS)
+    // Exception handler must NOT go through Logback — that would recurse back into this appender.
+    influxDB.enableBatch(
+      100,
+      500,
+      TimeUnit.MILLISECONDS,
+      java.util.concurrent.Executors.defaultThreadFactory(),
+      (_, t) => System.err.println(s"[InfluxDbAppender] batch write failed: $t"),
+    )
     super.start()
 
   override def stop(): Unit =
@@ -56,4 +63,5 @@ class InfluxDbAppender extends AppenderBase[ILoggingEvent]:
       )
       .addField("message", event.getFormattedMessage)
     mdcFields.foreach { case (k, v) => point.addField(k, v) }
-    influxDB.write(point.build())
+    try influxDB.write(point.build())
+    catch case t: Throwable => System.err.println(s"[InfluxDbAppender] write failed: $t")
