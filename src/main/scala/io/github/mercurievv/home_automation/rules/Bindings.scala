@@ -1,15 +1,14 @@
 package io.github.mercurievv.home_automation.rules
 
 import io.github.mercurievv.cats.arrow.kleisli.*
-import io.github.mercurievv.home_automation.rules.Devices.InputAction
 import io.github.mercurievv.home_automation.rules.EventTypes.*
 import io.github.mercurievv.home_automation.rules.EventTypes.given
+import io.github.mercurievv.home_automation.rules.devices.Devices.InputAction
 
 import cats.arrow.Arrow
 import cats.data.Kleisli
-import cats.derived.semiauto
 import cats.implicits.*
-import cats.{Applicative, Functor, Monad, MonoidK, ~>}
+import cats.{Applicative, Monad, MonoidK, ~>}
 
 import io.circe.*
 import io.circe.derivation.{Configuration, ConfiguredCodec}
@@ -19,47 +18,27 @@ import language.experimental.pureFunctions
 
 type Maybe[A] = List[A]
 
-object Devices:
-
-  case class InputAction[Action](
-    id: In[Topic],
-    action: Action)
-  given Functor[InputAction] = semiauto.functor
-
-  case class OutputAction[OutT](
-    id: Out[Topic],
-    encoder: Encoder[OutT],
-    decoder: Decoder[OutT])
-
 object Zigbee2Mqtt:
+  import io.github.mercurievv.home_automation.rules.devices.Devices.*
+  def d(deviceName: String): DeviceBuilder = DeviceBuilder("zigbee2mqtt", deviceName)
 
-  import Devices.*
+object HA:
+  import io.github.mercurievv.home_automation.rules.devices.Devices.*
+  def d(deviceName: String): DeviceBuilder = DeviceBuilder("ha", deviceName)
 
-  def d(deviceName: String): DeviceBuilder = DeviceBuilder(deviceName)
-
-  case class DeviceBuilder(deviceName: String):
-
-    def ia[F[_]: Applicative, S[_], T: Decoder](o2S: Option ~> S)
-      : InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]] =
-      InputAction[Kleisli[[a] =>> F[S[a]], In[JsonObject], T]](
-        id     = In(Topic("zigbee2mqtt", EntityId(deviceName), None)),
-        action = (
-          (v: In[JsonObject]) => o2S(v.value.toJson.as[T].toOption).pure[F],
-        ).k,
-      )
-
-    def oa[T: {Decoder, Encoder}]: OutputAction[T] =
-      OutputAction[T](
-        id      = Out(Topic("zigbee2mqtt", EntityId(deviceName), Some("set"))),
-        decoder = summon,
-        encoder = summon,
-      )
+  case class Attributes[A](
+    attributes: A)
 
 import io.github.mercurievv.monocle.circe.*
 
 given Configuration = Configuration.default.withDefaults
 
 given Codec[OnOffState] = OnOffState.prism.toCodec
+
+case class OnOffStateCC(
+  state: OnOffState = OnOffState.Off)
+given Toggleable[OnOffStateCC] = Toggleable(ls => ls.copy(state = ls.state.toggle))
+given Codec[OnOffStateCC] = ConfiguredCodec.derived
 
 case class PowerState(
   state: OnOffState = OnOffState.Off,
@@ -175,5 +154,13 @@ object Bindings:
           if h > 70 then Out(PowerState(state = OnOffState.On)) else Out(PowerState(state = OnOffState.Off))
         },
       ),
+      /*
+      bindStatefulAction[OnOffState, OnOffStateCC](
+        HA.d("binary_sensor.backyard_camera_person").ia[F, S, OnOffStateCC](o2s).map(_.map(_.state)),
+        HA.d("switch.plug_p4_balcony_projector_lights").oa,
+        Arrow[-->].lift { case (_, onOff) =>
+          if h > 70 then Out(PowerState(state = OnOffState.On)) else Out(PowerState(state = OnOffState.Off))
+        },
+      ),*/
     ).groupMap(_._1)(_._2).view.mapValues(l2s.apply).toMap
   }

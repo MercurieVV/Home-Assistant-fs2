@@ -63,8 +63,9 @@ lazy val root = (project in file("."))
     libraryDependencies  += "dev.optics"    %% "monocle-macro" % "3.3.0",
     libraryDependencies  += "com.47deg"     %% "fetch"         % "3.1.2",
     libraryDependencies  += "org.typelevel" %% "kittens"       % "3.5.0",
+    libraryDependencies  += "org.typelevel" %% "mouse"       % "1.4.0",
     // SQLite KV store
-    libraryDependencies += "org.tpolecat" %% "doobie-core"  % "1.0.0-RC5",
+    libraryDependencies += "org.tpolecat" %% "doobie-core"  % "1.0.0-RC8",
     libraryDependencies += "org.xerial"    % "sqlite-jdbc"  % "3.47.1.0",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "discipline-munit"  % "2.0.0"      % Test,

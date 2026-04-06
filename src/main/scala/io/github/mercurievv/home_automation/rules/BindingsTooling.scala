@@ -1,7 +1,7 @@
 package io.github.mercurievv.home_automation.rules
 
-import io.github.mercurievv.home_automation.rules.Devices.{InputAction, OutputAction}
 import io.github.mercurievv.home_automation.rules.EventTypes.{In, Out, St, Toggleable, Topic}
+import io.github.mercurievv.home_automation.rules.devices.Devices.{InputAction, OutputAction}
 
 import cats.Monad
 import cats.arrow.Arrow

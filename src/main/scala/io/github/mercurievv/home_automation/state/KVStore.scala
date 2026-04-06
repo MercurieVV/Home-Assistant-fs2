@@ -78,7 +78,9 @@ object KVStore:
           ),
           put = Kleisli { case (k, v) =>
             (sql"INSERT INTO " ++ dbt.tableNameFragment ++ sql" (key, value) VALUES ($k, $v)" ++
-              sql" ON CONFLICT(key) DO UPDATE SET value = excluded.value").update.run.transact(dbt.transactor).void
+              sql" ON CONFLICT(key) DO UPDATE SET value = excluded.value").update.run
+              .transact(dbt.transactor)
+              .void
           },
           delete = Kleisli(k =>
             (sql"DELETE FROM " ++ dbt.tableNameFragment ++ sql" WHERE key = $k").update.run

@@ -4,6 +4,7 @@ import io.github.mercurievv.minuscles.opaques.{Opaque, OpaqueFunctor}
 
 import scala.compiletime.*
 import scala.deriving.*
+import scala.language.experimental.pureFunctions
 
 import cats.Applicative
 import cats.implicits.catsSyntaxEitherId
@@ -46,6 +47,9 @@ object EventTypes {
 
   object Toggleable:
     inline def apply[A](using t: Toggleable[A]): Toggleable[A] = t
+
+    def apply[A](f: A -> A): Toggleable[A] = new Toggleable[A]:
+      extension (a: A) def toggle: A = f(a)
 
     def fromLens[A, B: Toggleable](l: Lens[A, B]): Toggleable[A] = new Toggleable[A]:
       val mod = l.modify(Toggleable[B].toggle)
