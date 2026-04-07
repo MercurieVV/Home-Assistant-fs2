@@ -29,10 +29,10 @@ object EventTypes {
   type EntityId = EntityId.Opq
 
   case class Topic(
-    service: String,
+    mqttService: String,
     entityId: EntityId,
     eventType: Option[String]):
-    val value: String = service + "/" + entityId + eventType.map("/" + _).getOrElse("")
+    val value: String = mqttService + "/" + entityId + eventType.map("/" + _).getOrElse("")
 
   object Topic:
 

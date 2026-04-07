@@ -7,8 +7,14 @@ import cats.implicits.*
 import cats.{Functor, Monad, Show, Traverse, ~>}
 
 import org.typelevel.log4cats.StructuredLogger
+import org.typelevel.otel4s.trace.Tracer
 
-class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}, Topic: Show, JsonObject: Show](
+class BindingsProcessor[
+  F[_]: {Monad, StructuredLogger, Tracer},
+  S[_]: {Monad, Traverse},
+  Topic: Show,
+  JsonObject: Show,
+](
   o2S: Option ~> S,
   actionsMap: Map[
     In[Topic],
@@ -51,24 +57,27 @@ class BindingsProcessor[F[_]: {Monad, StructuredLogger}, S[_]: {Monad, Traverse}
             )
         }
         .map(_.flatten)
-    /*        .flatTap(output =>
-          val messageJson = input.map(_._2).value.show
-          val outVal = output.map(_.value)
-          val outputTopic = outVal.map(_._1.toString)
-          val outJson = outVal.map(_._2.toString).toString
-          StructuredLogger[F]
-            .addContext(addLogContext(input.value._1) ++ Map("event" -> "decision_done"))
-            .info(
-              Map(
-                "inputTopic"    -> input.value._1.show,
-                "inputMessage"  -> messageJson,
-                "outputTopic"   -> outputTopic.toString,
-                "outputMessage" -> outJson,
-              ),
-            )(
-              s"Decision done. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outputTopic, output message: $outJson",
+        .flatTap(output =>
+          output
+            .map(_.value)
+            .traverse(v =>
+              val messageJson = input.map(_._2).value.show
+              val outputTopic = v._1.toString
+              val outJson = v._2.toString
+              StructuredLogger[F]
+                .addContext(addLogContext(input.value._1) ++ Map("event" -> "decision_done"))
+                .info(
+                  Map(
+                    "inputTopic"    -> input.value._1.show,
+                    "inputMessage"  -> messageJson,
+                    "outputTopic"   -> outputTopic.toString,
+                    "outputMessage" -> outJson,
+                  ),
+                )(
+                  s"Decision done. source: \"${input.value._1}\", input message: ${messageJson.take(500)}, output id: $outputTopic, output message: $outJson",
+                ),
             ),
-        )*/
-    }
+        )
+    }.mapF(Tracer[F].span("decision.process").surround(_))
 
 }

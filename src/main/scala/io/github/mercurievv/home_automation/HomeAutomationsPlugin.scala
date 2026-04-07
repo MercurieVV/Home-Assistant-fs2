@@ -77,10 +77,10 @@ class HomeAutomationsPlugin extends Plugin {
 
               val addLogContext: Topic => Map[String, String] = topic =>
                 Map(
-                  "entityId"  -> topic.entityId.value,
-                  "service"   -> topic.service,
-                  "eventType" -> topic.eventType.getOrElse(""),
-                  "topic"     -> topic.value,
+                  "entityId"    -> topic.entityId.value,
+                  "mqttService" -> topic.mqttService,
+                  "eventType"   -> topic.eventType.getOrElse(""),
+                  "topic"       -> topic.value,
                 )
               val pluginResources: Resource[F, ((AppConfig.MqttSettings, Session[F]), StatesT[F, Topic, JsonObject])] =
                 Async[F]
@@ -134,7 +134,7 @@ class HomeAutomationsPlugin extends Plugin {
                               val entityIdStr = v.value._1.value
                               entityIdStr.contains("mikrotik") ||
                               entityIdStr.contains("archer") ||
-                              (v.value._1.service == "ha" && v.value._2.toString.contains("measurement"))
+                              (v.value._1.mqttService == "ha" && v.value._2.toString.contains("measurement"))
                             }
                             .covary[F],
                         ),
@@ -180,7 +180,7 @@ class HomeAutomationsPlugin extends Plugin {
     }
 
   def createBindingProcessor[
-    F[_]: {SelfAwareStructuredLogger, Async, Applicative},
+    F[_]: {SelfAwareStructuredLogger, Async, Applicative, Tracer},
     S[_]: {Applicative, MonoidK, Monad, Traverse},
   ](
     addLogContext: Topic => Map[String, String],
