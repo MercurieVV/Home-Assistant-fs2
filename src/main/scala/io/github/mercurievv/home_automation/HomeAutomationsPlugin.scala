@@ -139,11 +139,17 @@ class HomeAutomationsPlugin extends Plugin {
                             .covary[F],
                         ),
                         if_Z2mBridgeGroups_then_splitK = Kleisli((ie: ts.InputEvent) =>
-                          if ie.value._1 == Topic("zigbee2mqtt", EntityId("bridge"), Some("groups")) then
+                          if (
+                              ie.value._1 == Topic("zigbee2mqtt",
+                                                   EntityId("bridge"),
+                                                   Some("groups"),
+                              ) || ie.value._1 == Topic("zigbee2mqtt", EntityId("bridge"), Some("devices"))
+                            )
+                          then
                             Stream.emits(
                               for {
                                 name <- ie.value._2("friendly_name").flatMap(_.asString).toList
-                              } yield In((Topic("zigbee2mqtt", EntityId(name), None), ie.value._2)),
+                              } yield In(ie.value._1.copy(entityId = EntityId(name), eventType = None), ie.value._2),
                             )
                           else Stream.emit(ie),
                         ),
@@ -160,6 +166,8 @@ class HomeAutomationsPlugin extends Plugin {
                       }
                       .drain
                 }
+                .onFinalize(Logger[F].warn("MQTT stream completed unexpectedly — will retry"))
+                .append(Stream.raiseError(new Exception("MQTT stream ended without error")))
                 .attempts(retryPolicy)
                 .evalMap {
                   case Left(e)  => Logger[F].error(e)(s"Plugin failed, retrying: ${e.getMessage}")
