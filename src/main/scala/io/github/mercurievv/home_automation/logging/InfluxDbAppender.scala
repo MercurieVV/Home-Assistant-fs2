@@ -45,7 +45,7 @@ class InfluxDbAppender extends AppenderBase[ILoggingEvent]:
 
   // High-cardinality MDC keys must be fields, not tags (InfluxDB tags are indexed
   // and have a cardinality limit of 100k unique values per key).
-  private val highCardinalityMdcKeys = Set("span_id", "trace_id", "parent_id", "parent_span_id")
+  private val highCardinalityMdcKeys = Set("span_id", "trace_id", "parent_id", "parent_span_id", "payload")
 
   override def append(event: ILoggingEvent): Unit =
     val mdc = event.getMDCPropertyMap.asScala.toMap
