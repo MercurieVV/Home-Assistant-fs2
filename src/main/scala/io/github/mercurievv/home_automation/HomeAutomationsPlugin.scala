@@ -47,9 +47,6 @@ import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 
 class HomeAutomationsPlugin extends Plugin {
-  reconfigureLogback()
-  given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
   private var runtime: IORuntime = uninitialized
@@ -221,25 +218,30 @@ class HomeAutomationsPlugin extends Plugin {
     finally loaded.keys.foreach(System.clearProperty)
 
   private def reconfigureLogback(): Unit =
-    val factory = org.slf4j.LoggerFactory.getILoggerFactory
-    System.err.println(s"[Plugin-logback] factory=${factory.getClass.getName} cl=${factory.getClass.getClassLoader}")
-    factory match
-      case context: LoggerContext =>
-        val url = getClass.getResource("/logback.xml")
-        System.err.println(s"[Plugin-logback] logback.xml url=$url")
-        if url != null then
-          val configurator = new JoranConfigurator()
-          configurator.setContext(context)
-          context.reset()
-          try withHoconAsSystemProps(configurator.doConfigure(url))
-          catch case e: Exception => System.err.println(s"[Plugin-logback] doConfigure failed: $e")
-          System.err.println(
-            s"[Plugin-logback] configured OK, appenders=${context.getLogger("root").iteratorForAppenders().hasNext}",
-          )
-        else System.err.println(s"[Plugin-logback] logback.xml NOT found in plugin classpath!")
-      case other =>
-        System.err.println(s"[Plugin-logback] factory is NOT LoggerContext: ${other.getClass.getName}")
-        System.err.println(s"[Plugin-logback] plugin LoggerContext cl: ${classOf[LoggerContext].getClassLoader}")
+    // Set system props BEFORE getILoggerFactory() so DefaultJoranConfigurator
+    // can resolve ${loki.url} etc. on the very first SLF4J initialization.
+    withHoconAsSystemProps {
+      val factory = org.slf4j.LoggerFactory.getILoggerFactory
+      System.err.println(s"[Plugin-logback] factory=${factory.getClass.getName} cl=${factory.getClass.getClassLoader}")
+      factory match {
+        case context: LoggerContext =>
+          val url = getClass.getResource("/logback.xml")
+          System.err.println(s"[Plugin-logback] logback.xml url=$url")
+          if url != null then
+            val configurator = new JoranConfigurator()
+            configurator.setContext(context)
+            context.reset()
+            try configurator.doConfigure(url)
+            catch case e: Exception => System.err.println(s"[Plugin-logback] doConfigure failed: $e")
+            System.err.println(
+              s"[Plugin-logback] configured OK, appenders=${context.getLogger("root").iteratorForAppenders().hasNext}",
+            )
+          else System.err.println(s"[Plugin-logback] logback.xml NOT found in plugin classpath!")
+        case other =>
+          System.err.println(s"[Plugin-logback] factory is NOT LoggerContext: ${other.getClass.getName}")
+          System.err.println(s"[Plugin-logback] plugin LoggerContext cl: ${classOf[LoggerContext].getClassLoader}")
+      }
+    }
 
   private def withTracing[F[_]: {Monad, Tracer}](
     underlying: SelfAwareStructuredLogger[F],
@@ -311,6 +313,9 @@ class HomeAutomationsPlugin extends Plugin {
   }
 
   override def start(): Unit = {
+    reconfigureLogback()
+    given SelfAwareStructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
     System.setProperty("cats.effect.trackFiberContext", "true")
     runtime = IORuntime.builder().build()
     given IORuntime = runtime
@@ -332,7 +337,8 @@ class HomeAutomationsPlugin extends Plugin {
       case Some(fiber) =>
         given IORuntime = runtime
         (fiber.cancel *> fiber.join.void)
-          .handleErrorWith(e => SelfAwareLogger[IO].error(e)(s"Stop failed: $e"))
+          .timeout(10.seconds)
+          .handleErrorWith(e => IO(System.err.println(s"Stop failed/timed out: $e")))
           .unsafeRunSync()
         runtime.shutdown()
         runtime = null
