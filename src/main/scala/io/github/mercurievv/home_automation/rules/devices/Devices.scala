@@ -35,7 +35,7 @@ object Devices:
 
     def oa[T: {Decoder, Encoder}]: OutputAction[T] =
       OutputAction[T](
-        id      = Out(Topic("zigbee2mqtt", EntityId(deviceName), Some("set"))),
+        id      = Out(Topic(service, EntityId(deviceName), Some("set"))),
         decoder = summon,
         encoder = summon,
       )

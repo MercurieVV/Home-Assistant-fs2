@@ -14,6 +14,8 @@ import io.circe.*
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import io.circe.{Codec, JsonObject}
 
+import mouse.all.*
+
 import language.experimental.pureFunctions
 
 type Maybe[A] = List[A]
@@ -57,7 +59,7 @@ given Codec[Closeable] = Codec.from(
   Encoder.encodeString.contramap(_.toString),
 )
 
-case class BlindsState(position: Int = 0)
+case class BlindsState(position: Int = 0, service: String = "cover.set_cover_position")
 given Codec[BlindsState] = ConfiguredCodec.derived
 
 given Toggleable[BlindsState] = new Toggleable[BlindsState]:
@@ -65,7 +67,7 @@ given Toggleable[BlindsState] = new Toggleable[BlindsState]:
   val doClose = BlindsState(0)
   extension (a: BlindsState)
     def toggle: BlindsState = a match {
-      case BlindsState(position) => if position < 50 then doOpen else doClose
+      case BlindsState(position, _) => if position < 50 then doOpen else doClose
     }
 
 case class TemperatureHumiditySensor(
@@ -132,7 +134,7 @@ object Bindings:
       ),
       bindStatefulAction[Unit, BlindsState](
         Zigbee2Mqtt.d("Workroom switch").ia[F, S, SwitchAction](o2s).toSU(_.action == "single_left"),
-        Zigbee2Mqtt.d("Workroom blinds").oa[BlindsState],
+        HA.d("cover.blinds_workroom_egwt_v2_curtain").oa[BlindsState],
         toggle,
       ),
 
@@ -148,7 +150,7 @@ object Bindings:
       ),
 
       bindStatefulAction[Float, PowerState](
-        Zigbee2Mqtt.d("Bathroom TH sensor").ia[F, S, TemperatureHumiditySensor](o2s).map(_.map(_.humidity)),
+        Zigbee2Mqtt.d("Bathroom TH sensor").ia[F, S, TemperatureHumiditySensor](o2s).mapNested2(_.humidity),
         Zigbee2Mqtt.d("Bathroom fan plug").oa,
         Arrow[-->].lift { case (_, h) =>
           if h > 70 then Out(PowerState(state = OnOffState.On)) else Out(PowerState(state = OnOffState.Off))
